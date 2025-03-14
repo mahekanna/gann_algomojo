@@ -1,0 +1,175 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 10 21:20:25 2025
+
+@author: mahes
+"""
+
+# Gann Square of 9 Trading System - Project Plan
+
+## 1. Project Overview
+
+This project aims to implement an automated trading system based on the Gann Square of 9 methodology using the AlgoMojo multi-broker API. The system will follow the defined trading rules for both equity and index markets, with a focus on long positions for equities and options trading.
+
+## 2. System Components
+
+### 2.1 Core Modules
+
+1. **Data Retrieval Module**
+   - Fetch price data from AlgoMojo API
+   - Support for multiple timeframes
+   - Historical data management for backtesting
+
+2. **Gann Square of 9 Analysis Module**
+   - Implement the original Gann Square of 9 algorithm
+   - Generate buy/sell signals based on previous candle close
+   - Calculate price targets and stop-loss levels
+
+3. **Trading Execution Module**
+   - Connect to AlgoMojo API for order execution
+   - Handle different order types (MIS, NRML)
+   - Support for equity and options trading
+   - Implement the specific trading rules for equity and index markets
+
+4. **Risk Management Module**
+   - Position sizing based on account balance
+   - Stop-loss placement
+   - Trade management
+   - Portfolio exposure limits
+
+5. **Logging and Reporting Module**
+   - Record all trades and signals
+   - Performance metrics
+   - Error handling and notifications
+
+### 2.2 Supporting Components
+
+1. **Configuration Interface**
+   - API credentials
+   - Trading parameters
+   - Risk management settings
+
+2. **Visualization Dashboard**
+   - Display Gann levels
+   - Show active positions
+   - Performance metrics
+
+## 3. Trading Rules Implementation
+
+### 3.1 Equity Trading
+
+- Entry:
+  - Long (Buy) positions only
+  - Simultaneously buy corresponding CE option (ATM, ITM, or ITM1)
+  - Use Gann Square of 9 'buy_above' signal for entry
+
+### 3.2 Index Trading
+
+- Entry:
+  - Long positions only through options
+  - Buy CE/PE options based on Gann signals
+  - No direct shorting or selling
+
+### 3.3 Signal Generation
+
+- Based on previous candle close price
+- Calculate Gann Square of 9 levels
+- Generate 'buy_above' and 'sell_below' signals
+- Use original code without modifications
+
+## 4. Technical Implementation
+
+### 4.1 Technology Stack
+
+- **Programming Language**: Python 3.8+
+- **API Integration**: AlgoMojo Python API
+- **Data Analysis**: Pandas, NumPy
+- **Visualization**: Matplotlib, Plotly
+- **Logging**: Python logging module
+- **Configuration**: JSON/YAML
+
+### 4.2 Code Structure
+
+```
+gann_trading_system/
+├── config/
+│   ├── api_config.json        # API credentials
+│   ├── trading_config.json    # Trading parameters
+│   └── symbols.json           # Tradable symbols
+├── src/
+│   ├── __init__.py
+│   ├── data_handler.py        # Market data fetching
+│   ├── gann_calculator.py     # Square of 9 implementation
+│   ├── trade_executor.py      # Order execution
+│   ├── risk_manager.py        # Position sizing and risk control
+│   ├── logger.py              # Logging functionality
+│   └── utils.py               # Utility functions
+├── models/
+│   ├── __init__.py
+│   ├── signal.py              # Signal data structure
+│   ├── position.py            # Position tracking
+│   └── trade.py               # Trade record
+├── web/                       # Optional web interface
+│   ├── static/
+│   └── templates/
+├── tests/                     # Unit tests
+│   ├── test_gann.py
+│   ├── test_trading.py
+│   └── test_risk.py
+├── main.py                    # Entry point
+└── requirements.txt
+```
+
+## 5. Implementation Plan
+
+### 5.1 Phase 1: Core Framework (Weeks 1-2)
+
+- Setup project structure
+- Implement Gann Square of 9 calculator
+- Basic AlgoMojo API integration
+- Data fetching and processing
+
+### 5.2 Phase 2: Trading Logic (Weeks 3-4)
+
+- Implement trading rules
+- Order execution
+- Position management
+- Basic risk management
+
+### 5.3 Phase 3: Testing and Refinement (Weeks 5-6)
+
+- Paper trading implementation
+- Backtesting framework
+- Performance optimization
+- Error handling
+
+### 5.4 Phase 4: Deployment and Monitoring (Weeks 7-8)
+
+- Deployment setup
+- Monitoring system
+- Documentation
+- User interface (if needed)
+
+## 6. Risk Considerations
+
+- API connection failures
+- Market data gaps
+- Order execution delays
+- Stop-loss failures
+- System crashes
+
+## 7. Performance Metrics
+
+- Win/loss ratio
+- Profit factor
+- Maximum drawdown
+- Sharpe ratio
+- Return on investment
+
+## 8. Documentation Requirements
+
+- System architecture
+- API integration guide
+- Trading rules implementation
+- Configuration options
+- Troubleshooting guide

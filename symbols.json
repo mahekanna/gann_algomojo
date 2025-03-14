@@ -1,0 +1,41 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Mar 12 22:58:10 2025
+
+@author: mahes
+"""
+
+{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "description": "Nifty 50 Index",
+            "type": "index",
+            "timeframe": "1h",
+            "exchange": "NSE",
+            "option_lot_size": 50,
+            "tv_symbol": "NIFTY",
+            "algomojo_symbol": "NIFTY-I"
+        },
+        {
+            "symbol": "BANKNIFTY",
+            "description": "Bank Nifty Index",
+            "type": "index",
+            "timeframe": "1h",
+            "exchange": "NSE",
+            "option_lot_size": 25,
+            "tv_symbol": "BANKNIFTY",
+            "algomojo_symbol": "BANKNIFTY-I"
+        },
+        {
+            "symbol": "RELIANCE",
+            "description": "Reliance Industries Ltd",
+            "type": "equity",
+            "timeframe": "1h",
+            "exchange": "NSE",
+            "option_lot_size": 250,
+            "tv_symbol": "RELIANCE",
+            "algomojo_symbol": "RELIANCE-EQ"
+        }
+    ]
+}

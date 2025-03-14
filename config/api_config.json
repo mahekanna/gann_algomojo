@@ -1,0 +1,80 @@
+// config/api_config.json
+{
+    "api_key": "216d657cdfad5ec9157a4932e046900e",
+    "api_secret": "d5fb40b0173a9868e3ef00c687ccd70c",
+    "broker_code": "ab",
+    "api_base_url": "https://amapi.algomojo.com/v1"
+}
+
+// config/trading_config.json
+{
+    "default_timeframe": "1H",
+    "default_product": "MIS",
+    "default_exchange": "NSE",
+    "order_retry_count": 3,
+    "order_retry_delay": 2,
+    "strategy_name": "Gann Square of 9",
+    "trading_hours": {
+        "start": "09:15",
+        "end": "15:30"
+    },
+    "scan_interval": 300,
+    "close_positions_on_exit": true,
+    "paper_trading": true,
+    "webhook_url": "https://amapi.algomojo.com/v1/webhook/ab/216d657cdfad5ec9157a4932e046900e/d5fb40b0173a9868e3ef00c687ccd70c/1252950_AB_27/PlaceStrategyOrder",
+    "gann_parameters": {
+        "increments": [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25],
+        "num_values": 20,
+        "buffer_percentage": 0.002,
+        "include_lower": true
+    },
+    "risk_parameters": {
+        "max_risk_per_trade": 0.01,
+        "max_positions": 5,
+        "max_risk_per_symbol": 0.02,
+        "max_daily_loss": 0.05,
+        "max_drawdown": 0.10,
+        "min_risk_reward": 1.5
+    }
+}
+
+// config/symbols.json
+{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "type": "index",
+            "timeframe": "1H",
+            "option_lot_size": 50,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "BANKNIFTY",
+            "type": "index",
+            "timeframe": "1H",
+            "option_lot_size": 25,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "RELIANCE-EQ",
+            "type": "equity",
+            "timeframe": "1H",
+            "option_lot_size": 250,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "INFY-EQ",
+            "type": "equity",
+            "timeframe": "1H",
+            "option_lot_size": 300,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "HDFCBANK-EQ",
+            "type": "equity",
+            "timeframe": "1H",
+            "option_lot_size": 550,
+            "exchange": "NSE"
+        }
+    ]
+}

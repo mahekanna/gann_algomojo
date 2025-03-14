@@ -1,0 +1,64 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Mar 12 22:57:41 2025
+
+@author: mahes
+"""
+
+{
+    "rules": [
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "-EQ",
+            "replacement": "",
+            "description": "Remove -EQ suffix when going from TradingView to AlgoMojo"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "-EQ",
+            "replacement": "",
+            "description": "Remove -EQ suffix when going from AlgoMojo to TradingView"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "",
+            "replacement": "-EQ",
+            "description": "Add -EQ suffix for equity symbols in AlgoMojo",
+            "apply_to": "equity"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "",
+            "replacement": "-I",
+            "description": "Add -I suffix for index symbols in AlgoMojo",
+            "apply_to": "index"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "-I",
+            "replacement": "",
+            "description": "Remove -I suffix when going from AlgoMojo to TradingView"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "([A-Z]+)(\\d{2}[A-Z]{3})(\\d+)(CE|PE)",
+            "replacement": "\\1-\\2-\\3-\\4",
+            "description": "Convert TradingView option format to AlgoMojo format",
+            "use_regex": true
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "([A-Z\\-]+)\\-(\\d{2}[A-Z]{3})\\-(\\d+)\\-(CE|PE)",
+            "replacement": "\\1\\2\\3\\4",
+            "description": "Convert AlgoMojo option format to TradingView format",
+            "use_regex": true
+        }
+    ]
+}

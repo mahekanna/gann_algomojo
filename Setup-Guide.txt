@@ -1,0 +1,292 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 10 23:07:32 2025
+
+@author: mahes
+"""
+
+# Gann Square of 9 Paper Trading System - Setup Guide
+
+This guide will help you set up and run the Gann Square of 9 Paper Trading System using tvDatafeed for market data and AlgoMojo for paper trading.
+
+## System Overview
+
+The Gann Paper Trading System is designed to:
+
+1. Fetch previous candle data from TradingView using tvDatafeed
+2. Calculate Gann Square of 9 levels based on the previous candle close
+3. Generate trading signals when current price crosses key Gann levels
+4. Execute paper trades through AlgoMojo's webhook system
+
+## Prerequisites
+
+Before setting up the system, ensure you have:
+
+1. Python 3.8 or higher installed
+2. AlgoMojo API account with webhook access
+3. Internet connection to access TradingView data
+4. Basic understanding of trading and options concepts
+
+## Installation
+
+### Step 1: Clone or download the code
+
+Download all the source code files to your local machine.
+
+### Step 2: Create a virtual environment (recommended)
+
+```bash
+# Create virtual environment
+python -m venv gann-env
+
+# Activate virtual environment
+# On Windows:
+gann-env\Scripts\activate
+# On macOS/Linux:
+source gann-env/bin/activate
+```
+
+### Step 3: Install required packages
+
+```bash
+pip install tvDatafeed pandas numpy requests argparse
+pip install algomojo  # If you're using AlgoMojo's Python library
+```
+
+### Step 4: Configure your system
+
+1. Create a `config` directory in the project root
+2. Create the following configuration files:
+
+#### api_config.json
+
+```json
+{
+    "api_key": "your-algomojo-api-key",
+    "api_secret": "your-algomojo-api-secret",
+    "broker_code": "your-broker-code"
+}
+```
+
+#### trading_config.json
+
+```json
+{
+    "default_timeframe": "1h",
+    "default_exchange": "NSE",
+    "scan_interval": 60,
+    "close_positions_on_exit": true,
+    "paper_trading": true,
+    "webhook_url": "https://amapi.algomojo.com/v1/webhook/ab/your-webhook-id/your-webhook-token/your-strategy-id/PlaceStrategyOrder",
+    "trading_hours": {
+        "start": "09:15",
+        "end": "15:30"
+    },
+    "gann_parameters": {
+        "increments": [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25],
+        "num_values": 20,
+        "buffer_percentage": 0.002,
+        "include_lower": true
+    },
+    "risk_parameters": {
+        "max_risk_per_trade": 0.01,
+        "max_positions": 5,
+        "max_daily_loss": 0.05,
+        "max_drawdown": 0.10
+    }
+}
+```
+
+#### symbols.json
+
+```json
+{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 50,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "BANKNIFTY",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 25,
+            "exchange": "NSE"
+        },
+        {
+            "symbol": "RELIANCE",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 250,
+            "exchange": "NSE"
+        }
+    ]
+}
+```
+
+## Running the System
+
+### Step 1: Create the directory structure
+
+Make sure your project has the following structure:
+
+```
+gann-square-of-9/
+├── config/
+│   ├── api_config.json
+│   ├── trading_config.json
+│   └── symbols.json
+├── logs/
+├── src/
+│   ├── __init__.py
+│   ├── tvdata_handler.py
+│   ├── gann_calculator.py
+│   ├── paper_trade_executor.py
+│   ├── risk_manager.py
+│   ├── logger.py
+│   ├── math_helper.py
+│   └── option_helpers.py
+├── strategy_templates/
+├── gann_paper_trading.py
+└── positions.json (will be created automatically)
+```
+
+### Step 2: Start the trading system
+
+```bash
+python gann_paper_trading.py
+```
+
+To use a different config directory:
+
+```bash
+python gann_paper_trading.py --config /path/to/your/config
+```
+
+### Step 3: Monitor operation
+
+The system will output logs to both the console and the `logs` directory. You can monitor these logs to track the system's operation.
+
+## Understanding the Workflow
+
+1. **Initialization**:
+   - System loads configurations
+   - Connects to data sources
+   - Initializes components
+
+2. **Symbol Processing**:
+   - For each configured symbol:
+     - Fetches previous candle data from TradingView
+     - Calculates Gann Square of 9 levels using previous close
+     - Compares current price to key Gann levels
+     - Generates trading signals when price crosses levels
+
+3. **Signal Execution**:
+   - Signals are placed in a queue for processing
+   - Each signal is validated against risk parameters
+   - Valid signals trigger paper trades via AlgoMojo webhook
+   - Positions are tracked locally
+
+4. **Position Monitoring**:
+   - Open positions are continuously monitored
+   - Stop-loss and target levels are checked
+   - Positions are closed when exit conditions are met
+
+## Trading Rules
+
+The system implements the following trading rules:
+
+1. **For Equity Symbols**:
+   - Enter long positions (buy stock) when price crosses above buy_above level
+   - Simultaneously buy CE (Call) options for the stock
+   - Buy PE (Put) options when price crosses below sell_below level
+   - No direct shorting of the market
+
+2. **For Index Symbols**:
+   - Buy CE (Call) options when price crosses above buy_above level
+   - Buy PE (Put) options when price crosses below sell_below level
+   - Only long option positions (buying options)
+
+## Customizing the System
+
+### Adding New Symbols
+
+To add new symbols for trading, edit the `symbols.json` file and add entries with the following format:
+
+```json
+{
+    "symbol": "SYMBOL_NAME",
+    "type": "equity or index",
+    "timeframe": "timeframe (1m, 5m, 15m, 1h, etc.)",
+    "option_lot_size": lot_size_value,
+    "exchange": "exchange_name"
+}
+```
+
+### Modifying Gann Parameters
+
+To adjust the Gann Square of 9 calculation, edit the `gann_parameters` section in `trading_config.json`:
+
+```json
+"gann_parameters": {
+    "increments": [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25],
+    "num_values": 20,
+    "buffer_percentage": 0.002,
+    "include_lower": true
+}
+```
+
+### Risk Management
+
+Adjust risk parameters in `trading_config.json`:
+
+```json
+"risk_parameters": {
+    "max_risk_per_trade": 0.01,
+    "max_positions": 5,
+    "max_daily_loss": 0.05,
+    "max_drawdown": 0.10
+}
+```
+
+## Troubleshooting
+
+### Data Connection Issues
+
+If you experience issues with tvDatafeed:
+
+1. Check your internet connection
+2. Verify that TradingView is accessible
+3. Ensure symbol names are correct and match TradingView format
+
+### AlgoMojo Webhook Issues
+
+If paper trades are not executing:
+
+1. Verify your webhook URL is correct
+2. Check AlgoMojo API credentials
+3. Ensure your strategy ID is correctly configured
+4. Check the logs for specific error messages
+
+### General Issues
+
+1. Check the log files in the `logs` directory for detailed error messages
+2. Verify all configuration files are correctly formatted
+3. Ensure all required packages are installed
+
+## Converting to Live Trading
+
+To convert from paper trading to live trading:
+
+1. Set `"paper_trading": false` in `trading_config.json`
+2. Implement the `LiveTradeExecutor` class that uses direct API calls instead of webhooks
+3. Thoroughly test with small position sizes initially
+
+## Conclusion
+
+The Gann Square of 9 Paper Trading System provides a flexible framework for testing trading strategies based on Gann's methodology. By using tvDatafeed for market data and AlgoMojo for paper trading, you can evaluate the effectiveness of the strategy without risking real capital.
+
+Always start with paper trading and thoroughly test any strategy before considering live trading with real funds.

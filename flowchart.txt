@@ -1,0 +1,58 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 10 21:19:37 2025
+
+@author: mahes
+"""
+
+flowchart TD
+    Start([Start System]) --> Config[Load Configuration]
+    Config --> Connect[Connect to AlgoMojo API]
+    Connect --> TimeframeSelect[Select Timeframe for Analysis]
+    TimeframeSelect --> DataFetch[Fetch Market Data]
+    DataFetch --> GannCalc[Calculate Gann Square of 9 Levels]
+    GannCalc --> Decision{Signal Generated?}
+    Decision -->|No| Wait[Wait for Next Candle]
+    Wait --> DataFetch
+    
+    Decision -->|Yes Buy Signal| CheckEquity{Is Equity?}
+    CheckEquity -->|Yes| BuyStock[Buy Equity]
+    BuyStock --> BuyCEOption[Buy CE Option]
+    BuyCEOption --> SetStopLoss[Set Stop Loss]
+    
+    CheckEquity -->|No| CheckIndex{Is Index?}
+    CheckIndex -->|Yes| BuyIndexOption[Buy CE Option]
+    BuyIndexOption --> SetStopLoss
+    
+    Decision -->|Yes Sell Signal| CheckEquitySell{Is Equity?}
+    CheckEquitySell -->|Yes| BuyPEOption[Buy PE Option]
+    BuyPEOption --> SetStopLoss
+    
+    CheckEquitySell -->|No| Wait
+    
+    SetStopLoss --> MonitorPosition[Monitor Position]
+    MonitorPosition --> ExitCheck{Exit Criteria Met?}
+    ExitCheck -->|No| MonitorPosition
+    ExitCheck -->|Yes| ClosePosition[Close Position]
+    ClosePosition --> LogTrade[Log Trade Results]
+    LogTrade --> DataFetch
+    
+    subgraph "Gann Square of 9 Calculation"
+    GannSubCalc[Calculate Central Value]
+    GannAngles[Generate Angle Values]
+    GannLevels[Identify Key Price Levels]
+    GannTargets[Calculate Target Levels]
+    
+    GannSubCalc --> GannAngles
+    GannAngles --> GannLevels
+    GannLevels --> GannTargets
+    end
+    
+    subgraph "Risk Management"
+    StopLossCalc[Calculate Stop Loss]
+    PositionSize[Determine Position Size]
+    RiskPerTrade[Apply Max Risk Per Trade]
+    
+    StopLossCalc --> PositionSize
+    PositionSize --> RiskPerTrade
+    end

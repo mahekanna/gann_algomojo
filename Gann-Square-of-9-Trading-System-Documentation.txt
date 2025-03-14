@@ -1,0 +1,286 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 10 21:42:04 2025
+
+@author: mahes
+"""
+
+# Gann Square of 9 Trading System - Documentation
+
+## Introduction
+
+This document provides comprehensive documentation for the Gann Square of 9 Trading System. The system implements an automated trading strategy based on W.D. Gann's Square of 9 methodology, integrated with the AlgoMojo multi-broker API for order execution.
+
+## System Overview
+
+The Gann Square of 9 Trading System analyzes price data using Gann's Square of 9 calculation to identify potential buy and sell signals. The system follows specific trading rules for equity and index markets, focusing on long positions and options strategies.
+
+### Core Features
+
+1. **Gann Square of 9 Analysis**
+   - Uses previous candle close to calculate key price levels
+   - Generates buy_above and sell_below signals
+   - Calculates multiple target levels at different angles
+
+2. **Trading Rules Implementation**
+   - Equity: Long positions only, with corresponding CE options
+   - Indexes: Long positions through options only (CE/PE)
+   - No shorting or selling the market directly
+
+3. **Risk Management**
+   - Position sizing based on account risk
+   - Stop-loss placement
+   - Maximum positions and exposure controls
+
+4. **Multi-Broker Support**
+   - Integration with AlgoMojo API
+   - Support for paper trading through webhooks
+
+## System Architecture
+
+The system follows a modular architecture with separate components for different functionalities:
+
+1. **Data Handler**: Fetches and processes market data
+2. **Gann Calculator**: Implements the Square of 9 calculation
+3. **Trade Executor**: Handles order execution through AlgoMojo
+4. **Risk Manager**: Manages risk and position sizing
+5. **Logger**: Records system activity and performance
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- AlgoMojo API account
+- Required Python packages:
+  - pandas
+  - numpy
+  - matplotlib
+  - requests
+  - algomojo (AlgoMojo Python API)
+
+### Setup
+
+1. Clone the repository or download the source code
+2. Install required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configure the system by editing the configuration files:
+   - `config/api_config.json`: API credentials
+   - `config/trading_config.json`: Trading parameters
+   - `config/symbols.json`: Symbols to trade
+
+## Configuration
+
+### API Configuration
+
+Edit `config/api_config.json` to include your AlgoMojo API credentials:
+
+```json
+{
+    "api_key": "your-api-key",
+    "api_secret": "your-api-secret",
+    "broker_code": "your-broker-code"
+}
+```
+
+### Trading Configuration
+
+Edit `config/trading_config.json` to customize trading parameters:
+
+```json
+{
+    "default_timeframe": "1H",
+    "default_product": "MIS",
+    "default_exchange": "NSE",
+    "trading_hours": {
+        "start": "09:15",
+        "end": "15:30"
+    },
+    "paper_trading": true,
+    "gann_parameters": {
+        "increments": [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25],
+        "num_values": 20,
+        "buffer_percentage": 0.002
+    },
+    "risk_parameters": {
+        "max_risk_per_trade": 0.01,
+        "max_positions": 5,
+        "max_daily_loss": 0.05
+    }
+}
+```
+
+### Symbol Configuration
+
+Edit `config/symbols.json` to define the symbols to trade:
+
+```json
+{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "type": "index",
+            "timeframe": "1H",
+            "option_lot_size": 50
+        },
+        {
+            "symbol": "RELIANCE-EQ",
+            "type": "equity",
+            "timeframe": "1H",
+            "option_lot_size": 250
+        }
+    ]
+}
+```
+
+## Usage
+
+### Starting the System
+
+Run the main Python script to start the trading system:
+
+```bash
+python main.py
+```
+
+### Paper Trading Mode
+
+By default, the system operates in paper trading mode. Set `"paper_trading": false` in `trading_config.json` to switch to real trading mode.
+
+### Logging
+
+Logs are stored in the `logs` directory:
+- System logs: `logs/gann_trading_YYYY-MM-DD.log`
+- Performance logs: `logs/performance/daily_performance.csv`
+
+## Understanding Gann Square of 9
+
+W.D. Gann's Square of 9 is a mathematical technique used to identify potential price levels where a market might encounter support or resistance. The concept involves arranging numbers in a spiral pattern radiating outward from a central price.
+
+### Implementation Details
+
+The system implements the Gann Square of 9 using the following approach:
+
+1. **Base Calculation**:
+   - The square root of the previous candle's closing price is taken
+   - The floor value of this square root becomes the base
+
+2. **Angle Calculations**:
+   - Different angles (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°) are calculated
+   - Each angle has a specific increment value
+   - Cardinal angles (0°, 90°, 180°, 270°) use different calculations from ordinal angles
+
+3. **Signal Generation**:
+   - The system identifies the nearest price level above the current price (`buy_above`)
+   - The system identifies the nearest price level below the current price (`sell_below`)
+   - When the current price crosses these levels, trading signals are generated
+
+## Trading Rules
+
+### Equity Trading
+
+- **Entry Conditions**:
+  - Long (Buy) positions only
+  - Enter when current price crosses above the `buy_above` level
+  - Simultaneously buy a Call (CE) option (ATM, ITM, or ITM1)
+
+- **Exit Conditions**:
+  - Target price reached (calculated from Gann targets)
+  - Stop loss triggered (calculated from Gann levels)
+
+### Index Trading
+
+- **Entry Conditions**:
+  - Long positions through options only
+  - Buy CE options when price crosses above the `buy_above` level
+  - Buy PE options when price crosses below the `sell_below` level
+
+- **Exit Conditions**:
+  - Target price reached
+  - Stop loss triggered
+
+## Risk Management
+
+The system incorporates robust risk management features:
+
+- **Position Sizing**: Calculates position size based on account balance and risk per trade
+- **Maximum Positions**: Limits the number of concurrent positions
+- **Maximum Daily Loss**: Stops trading when daily loss limit is reached
+- **Drawdown Control**: Monitors account drawdown and adjusts risk accordingly
+- **Stop-Loss Placement**: Places stop-loss orders based on Gann levels
+
+## Performance Monitoring
+
+The system records comprehensive performance metrics:
+
+- **Trade Statistics**: Win rate, average profit/loss, profit factor
+- **Daily Performance**: Account balance, daily P&L, number of trades
+- **Position Tracking**: Open positions, realized P&L, unrealized P&L
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Connection Failures**:
+   - Check API credentials
+   - Verify internet connection
+   - Ensure broker servers are operational
+
+2. **Order Execution Issues**:
+   - Check log files for error messages
+   - Verify order parameters
+   - Ensure account has sufficient funds
+
+3. **Data Retrieval Problems**:
+   - Check connectivity to data sources
+   - Verify symbol names are correct
+   - Check exchange trading hours
+
+### Log Analysis
+
+Use the log files to diagnose issues:
+
+```python
+from src.logger import TradeLogger
+
+# Parse logs
+logger = TradeLogger()
+log_data = logger.parse_log_file()
+
+# Analyze errors
+for error in log_data['errors']:
+    print(f"{error['timestamp']}: {error['context']} - {error['message']}")
+```
+
+## Extending the System
+
+### Adding New Indicators
+
+1. Create a new module in the `src` directory
+2. Implement the indicator logic
+3. Integrate with the main signal generation logic
+
+### Customizing Trading Rules
+
+1. Modify the `check_for_signal` function in `main.py`
+2. Update the `execute_trade` function for new execution logic
+
+### Adding New Brokers
+
+The system currently uses AlgoMojo which supports multiple brokers. To add specific broker integration:
+
+1. Create a new module extending the `TradeExecutor` class
+2. Implement broker-specific order execution methods
+3. Update configuration to use the new broker module
+
+## Conclusion
+
+The Gann Square of 9 Trading System provides a robust implementation of W.D. Gann's methodology for automated trading. By following the configuration guidelines and understanding the system architecture, users can effectively deploy and customize the system for their trading needs.
+
+For further assistance or feature requests, please contact the system developers.
+
+---
+
+© 2025 Gann Square of 9 Trading System

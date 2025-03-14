@@ -1,0 +1,64 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 10 21:44:12 2025
+
+@author: mahes
+"""
+
+classDiagram
+    class BaseTradeExecutor {
+        <<abstract>>
+        +init(api_config, trading_config)
+        +place_order(symbol, action, quantity, price_type, price)
+        +place_options_order(underlying, expiry, strike, option_type, action, quantity)
+        +modify_order(order_id, price, quantity)
+        +cancel_order(order_id)
+        +get_order_status(order_id)
+        +close_position(symbol, product)
+        +close_all_positions()
+    }
+    
+    class PaperTradeExecutor {
+        -webhook_url: string
+        -strategy_templates: dict
+        +init(api_config, trading_config)
+        +load_strategy_templates()
+        +create_strategy_template(name, parameters)
+        +send_webhook_order(strategy_id, action, parameters)
+        +simulate_execution(order_details)
+        +get_template_status(template_id)
+    }
+    
+    class LiveTradeExecutor {
+        -algomojo: AlgoMojoAPI
+        -retry_mechanism: RetryHandler
+        +init(api_config, trading_config)
+        +check_connection()
+        +validate_order_parameters(parameters)
+        +handle_execution_error(error, order_details)
+        +monitor_order_execution(order_id, timeout)
+    }
+    
+    BaseTradeExecutor <|-- PaperTradeExecutor
+    BaseTradeExecutor <|-- LiveTradeExecutor
+    
+    class StrategyTemplate {
+        +id: string
+        +name: string
+        +parameters: dict
+        +webhook_endpoint: string
+        +init(id, name, parameters)
+        +to_json()
+        +from_json(json_data)
+    }
+    
+    class RetryHandler {
+        +max_attempts: int
+        +delay: int
+        +backoff_factor: float
+        +init(max_attempts, delay, backoff_factor)
+        +execute(function, parameters)
+    }
+    
+    PaperTradeExecutor -- StrategyTemplate : uses >
+    LiveTradeExecutor -- RetryHandler : uses >
