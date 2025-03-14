@@ -1,0 +1,815 @@
+Based on the comprehensive documentation and code you've provided, I'll help you implement the complete Gann Square of 9 trading system. Your system will integrate with the AlgoMojo API for order execution and use TradingView data for market analysis.
+Let's create a complete implementation plan with all necessary components:
+gann_dashboard.py - Visualization Dashboard for Gann LevelsClick to open codeTap to open
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import numpy as np
+import pandas as pd
+import threading
+import time
+import json
+import os
+from pathlib import Path
+from datetime import datetime
+
+# Import the required modules from our system
+from src.gann_calculator import GannCalculator
+from src.tvdata_handler import TVDataHandler
+from src.symbol_registry import SymbolRegistry
+
+class GannDashboard:
+    """
+    Visualization dashboard for Gann Square of 9 levels and trading signals
+    """
+    
+    def __init__(self, config_dir="config"):
+        """
+        Initialize the dashboard
+        
+        Parameters:
+        -----------
+        config_dir : str
+            Path to configuration directory
+        """
+        self.config_dir = Path(config_dir)
+        self.root = tk.Tk()
+        self.root.title("Gann Square of 9 Trading Dashboard")
+        self.root.geometry("1200x800")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # Load configurations
+        self.load_config()
+        
+        # Initialize components
+        self.symbol_registry = SymbolRegistry(config_dir)
+        self.tvdata_handler = TVDataHandler(config_dir)
+        self.gann_calculator = GannCalculator(self.trading_config.get('gann_parameters', {}))
+        
+        # Create GUI elements
+        self.create_gui()
+        
+        # Start data update thread
+        self.running = True
+        self.update_thread = threading.Thread(target=self.update_data_thread, daemon=True)
+        self.update_thread.start()
+    
+    def load_config(self):
+        """Load configuration files"""
+        try:
+            # Load trading configuration
+            trading_config_path = self.config_dir / "trading_config.json"
+            with open(trading_config_path, 'r') as f:
+                self.trading_config = json.load(f)
+            
+            # Load symbols configuration
+            symbols_config_path = self.config_dir / "symbols.json"
+            with open(symbols_config_path, 'r') as f:
+                self.symbols_config = json.load(f)
+            
+            print("Configurations loaded successfully")
+            
+        except Exception as e:
+            print(f"Error loading configurations: {e}")
+            self.trading_config = {}
+            self.symbols_config = {"symbols": []}
+    
+    def create_gui(self):
+        """Create the GUI elements"""
+        # Create main frame
+        main_frame = ttk.Frame(self.root, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create left panel for controls
+        left_panel = ttk.Frame(main_frame, width=300, padding=5)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y)
+        
+        # Create right panel for charts
+        right_panel = ttk.Frame(main_frame)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        # Symbol selection
+        ttk.Label(left_panel, text="Symbol:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.symbol_var = tk.StringVar()
+        self.symbol_combo = ttk.Combobox(left_panel, textvariable=self.symbol_var)
+        self.symbol_combo.grid(row=0, column=1, pady=5)
+        self.symbol_combo['values'] = [sym.get('symbol', '') for sym in self.symbols_config.get('symbols', [])]
+        if self.symbol_combo['values']:
+            self.symbol_combo.current(0)
+        self.symbol_combo.bind("<<ComboboxSelected>>", self.on_symbol_change)
+        
+        # Timeframe selection
+        ttk.Label(left_panel, text="Timeframe:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.timeframe_var = tk.StringVar(value="1h")
+        timeframe_combo = ttk.Combobox(left_panel, textvariable=self.timeframe_var)
+        timeframe_combo.grid(row=1, column=1, pady=5)
+        timeframe_combo['values'] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
+        timeframe_combo.bind("<<ComboboxSelected>>", self.on_timeframe_change)
+        
+        # Manual price entry
+        ttk.Label(left_panel, text="Price:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.price_var = tk.StringVar()
+        price_entry = ttk.Entry(left_panel, textvariable=self.price_var)
+        price_entry.grid(row=2, column=1, pady=5)
+        
+        # Refresh button
+        refresh_button = ttk.Button(left_panel, text="Refresh Data", command=self.refresh_data)
+        refresh_button.grid(row=3, column=0, columnspan=2, pady=10)
+        
+        # Gann levels information
+        ttk.Label(left_panel, text="Gann Levels:").grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
+        self.levels_text = tk.Text(left_panel, height=15, width=35)
+        self.levels_text.grid(row=5, column=0, columnspan=2, pady=5)
+        
+        # Current signals
+        ttk.Label(left_panel, text="Trading Signals:").grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=5)
+        self.signals_text = tk.Text(left_panel, height=8, width=35)
+        self.signals_text.grid(row=7, column=0, columnspan=2, pady=5)
+        
+        # Create chart areas in right panel
+        # Price chart
+        self.price_figure, self.price_ax = plt.subplots(figsize=(8, 4))
+        self.price_canvas = FigureCanvasTkAgg(self.price_figure, master=right_panel)
+        self.price_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Gann levels chart
+        self.gann_figure, self.gann_ax = plt.subplots(figsize=(8, 4))
+        self.gann_canvas = FigureCanvasTkAgg(self.gann_figure, master=right_panel)
+        self.gann_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Initial data load
+        self.refresh_data()
+    
+    def on_symbol_change(self, event):
+        """Handle symbol change event"""
+        self.refresh_data()
+    
+    def on_timeframe_change(self, event):
+        """Handle timeframe change event"""
+        self.refresh_data()
+    
+    def refresh_data(self):
+        """Refresh data and update charts"""
+        symbol = self.symbol_var.get()
+        timeframe = self.timeframe_var.get()
+        
+        if not symbol:
+            return
+        
+        # Get symbol info
+        symbol_info = None
+        for sym in self.symbols_config.get('symbols', []):
+            if sym.get('symbol') == symbol:
+                symbol_info = sym
+                break
+        
+        if not symbol_info:
+            return
+        
+        # Get current price
+        current_price = self.tvdata_handler.get_current_price(symbol)
+        if current_price:
+            self.price_var.set(str(current_price))
+        
+        # Override with manual entry if provided
+        if self.price_var.get():
+            try:
+                current_price = float(self.price_var.get())
+            except ValueError:
+                pass
+        
+        if not current_price:
+            return
+        
+        # Get previous candle for Gann calculation
+        prev_candle = self.tvdata_handler.get_previous_candle(symbol, timeframe=timeframe)
+        if not prev_candle:
+            return
+        
+        # Calculate Gann levels
+        gann_results = self.gann_calculator.calculate(prev_candle['close'])
+        if not gann_results:
+            return
+        
+        # Update Gann levels text
+        self.update_levels_text(gann_results, current_price)
+        
+        # Update charts
+        self.update_price_chart(symbol, timeframe)
+        self.update_gann_chart(gann_results, current_price)
+        
+        # Check for signals
+        self.check_for_signals(gann_results, current_price, symbol_info)
+    
+    def update_levels_text(self, gann_results, current_price):
+        """Update the Gann levels text display"""
+        self.levels_text.delete('1.0', tk.END)
+        
+        text = f"Current Price: {current_price:.2f}\n\n"
+        text += f"Buy Above: {gann_results['buy_above']:.2f}\n"
+        text += f"Sell Below: {gann_results['sell_below']:.2f}\n"
+        text += f"Stoploss Long: {gann_results['stoploss_long']:.2f}\n"
+        text += f"Stoploss Short: {gann_results['stoploss_short']:.2f}\n\n"
+        
+        text += "Buy Targets:\n"
+        for i, target in enumerate(gann_results.get('buy_targets', [])[:5]):
+            text += f"  {i+1}. {target:.2f}\n"
+        
+        text += "\nSell Targets:\n"
+        for i, target in enumerate(gann_results.get('sell_targets', [])[:5]):
+            text += f"  {i+1}. {target:.2f}\n"
+        
+        self.levels_text.insert(tk.END, text)
+    
+    def update_price_chart(self, symbol, timeframe):
+        """Update the price chart"""
+        # Get historical data
+        data = self.tvdata_handler.get_historical_data(symbol, timeframe=timeframe, limit=50)
+        if data is None or data.empty:
+            return
+        
+        # Clear previous plot
+        self.price_ax.clear()
+        
+        # Plot OHLC
+        dates = range(len(data))
+        self.price_ax.plot(dates, data['close'], label='Close')
+        
+        # Add labels and title
+        self.price_ax.set_title(f"{symbol} - {timeframe} Chart")
+        self.price_ax.set_xlabel("Candles")
+        self.price_ax.set_ylabel("Price")
+        self.price_ax.legend()
+        self.price_ax.grid(True)
+        
+        # Update canvas
+        self.price_canvas.draw()
+    
+    def update_gann_chart(self, gann_results, current_price):
+        """Update the Gann levels chart"""
+        # Clear previous plot
+        self.gann_ax.clear()
+        
+        # Prepare data for visualization
+        levels = {
+            'Current': current_price,
+            'Buy Above': gann_results['buy_above'],
+            'Sell Below': gann_results['sell_below'],
+            'SL Long': gann_results['stoploss_long'],
+            'SL Short': gann_results['stoploss_short']
+        }
+        
+        # Add buy targets
+        for i, target in enumerate(gann_results.get('buy_targets', [])[:3]):
+            levels[f'Buy Target {i+1}'] = target
+        
+        # Add sell targets
+        for i, target in enumerate(gann_results.get('sell_targets', [])[:3]):
+            levels[f'Sell Target {i+1}'] = target
+        
+        # Create a horizontal bar chart
+        y_pos = np.arange(len(levels))
+        values = list(levels.values())
+        labels = list(levels.keys())
+        
+        colors = []
+        for label in labels:
+            if 'Buy' in label or 'SL Long' in label:
+                colors.append('green')
+            elif 'Sell' in label or 'SL Short' in label:
+                colors.append('red')
+            else:
+                colors.append('blue')
+        
+        # Plot horizontal lines for each level
+        self.gann_ax.hlines(y=values, xmin=0, xmax=1, color=colors, linewidth=2)
+        
+        # Add labels to each line
+        for i, (label, value) in enumerate(zip(labels, values)):
+            self.gann_ax.annotate(
+                f"{label}: {value:.2f}", 
+                xy=(1.01, value), 
+                xycoords=('axes fraction', 'data'),
+                va='center'
+            )
+        
+        # Set y-limits with some padding
+        min_value = min(values) * 0.995
+        max_value = max(values) * 1.005
+        self.gann_ax.set_ylim(min_value, max_value)
+        
+        # Hide x-axis
+        self.gann_ax.set_xticks([])
+        
+        # Add title
+        self.gann_ax.set_title("Gann Square of 9 Price Levels")
+        
+        # Add current price line
+        self.gann_ax.axhline(y=current_price, color='blue', linestyle='-', linewidth=2)
+        
+        # Update canvas
+        self.gann_canvas.draw()
+    
+    def check_for_signals(self, gann_results, current_price, symbol_info):
+        """Check for trading signals based on Gann levels"""
+        self.signals_text.delete('1.0', tk.END)
+        
+        symbol = symbol_info.get('symbol', '')
+        symbol_type = symbol_info.get('type', '')
+        
+        buy_above = gann_results.get('buy_above')
+        sell_below = gann_results.get('sell_below')
+        
+        signals = []
+        
+        if buy_above and current_price > buy_above:
+            if symbol_type == 'equity':
+                signals.append(f"BUY {symbol} STOCK")
+                signals.append(f"BUY {symbol} CE OPTION")
+            elif symbol_type == 'index':
+                signals.append(f"BUY {symbol} CE OPTION")
+        
+        if sell_below and current_price < sell_below:
+            if symbol_type == 'equity':
+                signals.append(f"BUY {symbol} PE OPTION")
+        
+        if signals:
+            self.signals_text.insert(tk.END, "ACTIVE SIGNALS:\n\n")
+            for signal in signals:
+                self.signals_text.insert(tk.END, f"• {signal}\n")
+        else:
+            self.signals_text.insert(tk.END, "No active signals at current price.")
+    
+    def update_data_thread(self):
+        """Background thread to periodically update data"""
+        while self.running:
+            time.sleep(30)  # Update every 30 seconds
+            if self.running:  # Check again to avoid errors during shutdown
+                # Use after() to update GUI from the main thread
+                self.root.after(0, self.refresh_data)
+    
+    def on_close(self):
+        """Handle window close event"""
+        self.running = False
+        self.root.destroy()
+    
+    def run(self):
+        """Run the dashboard"""
+        self.root.mainloop()
+
+
+if __name__ == "__main__":
+    dashboard = GannDashboard()
+    dashboard.run()
+	
+	
+	
+Now, let's create a complete Gann trading module that implements the core calculator functionality:
+src/gann_calculator.py - Gann Square of 9 ImplementationClick to open codeTap to open
+# src/gann_calculator.py
+
+import math
+import logging
+import numpy as np
+import pandas as pd
+
+class GannCalculator:
+    """
+    Implements the Gann Square of 9 calculation for trading signals
+    """
+    
+    def __init__(self, gann_params):
+        """
+        Initialize the Gann calculator with parameters
+        
+        Parameters:
+        -----------
+        gann_params : dict
+            Dictionary containing Gann Square of 9 parameters
+            - increments: list of increments for different angles
+            - num_values: number of values to generate per angle
+            - buffer_percentage: percentage buffer for stoploss calculation
+            - include_lower: whether to include values below central value
+        """
+        self.logger = logging.getLogger(__name__)
+        
+        # Extract parameters or use defaults
+        self.increments = gann_params.get('increments', [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25])
+        self.num_values = gann_params.get('num_values', 20)
+        self.buffer_percentage = gann_params.get('buffer_percentage', 0.002)
+        self.include_lower = gann_params.get('include_lower', True)
+        
+    def calculate(self, price):
+        """
+        Calculate Gann Square of 9 levels for a given price
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for (typically previous candle close)
+            
+        Returns:
+        --------
+        dict
+            Dictionary containing Gann levels and targets
+        """
+        try:
+            self.logger.info(f"Calculating Gann Square of 9 for price: {price}")
+            
+            # Generate Gann values for different angles
+            gann_values = self._gann_square_of_9(price)
+            
+            # Find buy above and sell below levels (0° angle)
+            buy_level_0, sell_level_0 = self._find_buy_sell_levels(price, {'0°': gann_values['0°']})
+            
+            if not buy_level_0 or not sell_level_0:
+                self.logger.warning(f"Could not find buy/sell levels for price {price}")
+                return None
+            
+            # Get targets from various angles
+            buy_targets, sell_targets = self._get_unique_targets_from_angles(
+                buy_level_0[1],
+                gann_values,
+                8,  # Number of target levels
+                price,
+                sell_level_0[1]
+            )
+            
+            # Calculate stoploss levels
+            long_stoploss, short_stoploss = self._calculate_stoploss(
+                buy_level_0, 
+                sell_level_0, 
+                self.buffer_percentage
+            )
+            
+            # Prepare results
+            results = {
+                "price": price,
+                "buy_above": buy_level_0[1],
+                "sell_below": sell_level_0[1],
+                "buy_targets": [value for _, value in buy_targets],
+                "sell_targets": [value for _, value in sell_targets],
+                "stoploss_long": long_stoploss,
+                "stoploss_short": short_stoploss,
+                "gann_values": gann_values
+            }
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error in Gann calculation: {e}")
+            return None
+    
+    def _gann_square_of_9(self, price):
+        """
+        Generates Gann Square of 9 levels for different angles.
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for
+            
+        Returns:
+        --------
+        dict
+            Dictionary of Gann values for different angles
+        """
+        gann_values = {}
+        angles = ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']
+
+        root = math.sqrt(price)
+        base = math.floor(root)
+        central_value = base * base
+
+        for angle, increment in zip(angles, self.increments):
+            gann_values[angle] = []
+            is_cardinal = angle.replace('°', '').isdigit() and int(angle.replace('°', '')) % 90 == 0
+            base_mult = 1.0 if is_cardinal else 1.125
+
+            if self.include_lower:
+                lower_count = self.num_values // 2
+                for i in range(lower_count, 0, -1):
+                    if is_cardinal:
+                        val = base - (i * increment)
+                        if val > 0:
+                            squared = val * val
+                            gann_values[angle].insert(0, round(squared, 2))
+                    else:
+                        val = base - (i * increment * base_mult)
+                        if val > 0:
+                            squared = val * val
+                            gann_values[angle].insert(0, round(squared, 2))
+
+            gann_values[angle].append(round(central_value, 2))
+
+            for i in range(1, self.num_values + 1):
+                if is_cardinal:
+                    val = base + (i * increment)
+                    squared = val * val
+                else:
+                    val = base + (i * increment * base_mult)
+                    squared = val * val
+                gann_values[angle].append(round(squared, 2))
+
+        return gann_values
+    
+    def _find_buy_sell_levels(self, price, gann_values):
+        """
+        Finds the nearest Buy and Sell levels from the 0° angle.
+        
+        Parameters:
+        -----------
+        price : float
+            Current price
+        gann_values : dict
+            Dictionary of Gann values
+            
+        Returns:
+        --------
+        tuple
+            (buy_level, sell_level)
+        """
+        buy_above = None
+        sell_below = None
+        closest_above = None
+        closest_below = None
+
+        if '0°' in gann_values:
+            for value in gann_values['0°']:
+                if value > price and (closest_above is None or value < closest_above):
+                    closest_above = value
+                    buy_above = ('0°', value)
+                if value < price and (closest_below is None or value > closest_below):
+                    closest_below = value
+                    sell_below = ('0°', value)
+
+        return buy_above, sell_below
+    
+    def _get_unique_targets_from_angles(self, entry_value, gann_values, num_levels, current_price, sell_below_value):
+        """
+        Fetch unique buy and sell targets, ensuring unique buy targets per angle.
+        
+        Parameters:
+        -----------
+        entry_value : float
+            Entry price
+        gann_values : dict
+            Dictionary of Gann values
+        num_levels : int
+            Number of target levels to return
+        current_price : float
+            Current market price
+        sell_below_value : float
+            Sell below level
+            
+        Returns:
+        --------
+        tuple
+            (buy_targets, sell_targets)
+        """
+        angles = ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']
+        buy_targets = []
+        sell_targets = []
+        used_values_buy = set()
+        used_values_sell = set()
+
+        # Buy targets: Ensure unique values, one per angle
+        for angle in angles:
+            values_above = [v for v in gann_values[angle] if v > entry_value and v not in used_values_buy]
+            if values_above:
+                closest_above = min(values_above)
+                buy_targets.append((angle, closest_above))
+                used_values_buy.add(closest_above)
+
+        # Sell targets: Start with central value, then unique below sell_below_value
+        central_value = math.floor(math.sqrt(current_price)) ** 2
+        if central_value < sell_below_value:
+            sell_targets.append(('0°', central_value))
+            used_values_sell.add(central_value)
+
+        for angle in angles:
+            values_below = [v for v in gann_values[angle] if v < sell_below_value and v not in used_values_sell]
+            if values_below:
+                highest_below = max(values_below)
+                sell_targets.append((angle, highest_below))
+                used_values_sell.add(highest_below)
+
+        # Sort and limit to num_levels
+        buy_targets = sorted(buy_targets, key=lambda x: x[1])[:num_levels]
+        sell_targets = sorted(sell_targets, key=lambda x: x[1], reverse=True)[:num_levels]
+
+        return buy_targets, sell_targets
+    
+    def _calculate_stoploss(self, buy_above, sell_below, buffer_percentage):
+        """
+        Calculate stoploss for long and short trades.
+        
+        Parameters:
+        -----------
+        buy_above : tuple
+            Buy above level (angle, price)
+        sell_below : tuple
+            Sell below level (angle, price)
+        buffer_percentage : float
+            Buffer percentage for stoploss
+            
+        Returns:
+        --------
+        tuple
+            (long_stoploss, short_stoploss)
+        """
+        long_stoploss = round(sell_below[1] * (1 - buffer_percentage), 2) if sell_below else None
+        short_stoploss = round(buy_above[1] * (1 + buffer_percentage), 2) if buy_above else None
+        return long_stoploss, short_stoploss
+    
+    def generate_visualization_data(self, price):
+        """
+        Generate visualization data for Gann levels (for UI display)
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for
+            
+        Returns:
+        --------
+        dict
+            Dictionary containing visualization data
+        """
+        try:
+            # Calculate Gann levels
+            results = self.calculate(price)
+            if not results:
+                return None
+                
+            # Prepare visualization data
+            visualization_data = {
+                "price": price,
+                "angles": [],
+                "buy_above": results["buy_above"],
+                "sell_below": results["sell_below"],
+                "buy_targets": results["buy_targets"][:3],
+                "sell_targets": results["sell_targets"][:3]
+            }
+            
+            # Format angle data for visualization
+            for angle in ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']:
+                angle_data = {
+                    "angle": angle,
+                    "values": results["gann_values"][angle][:10]  # First 10 values for display
+                }
+                visualization_data["angles"].append(angle_data)
+                
+            return visualization_data
+            
+        except Exception as e:
+            self.logger.error(f"Error generating visualization: {e}")
+            return None
+    
+    def gann_table(self, price):
+        """
+        Generate a formatted table showing Gann Square of 9 values
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for
+            
+        Returns:
+        --------
+        str
+            Formatted table string
+        """
+        # Calculate Gann values
+        gann_values = self._gann_square_of_9(price)
+        
+        # Generate header
+        angles = ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']
+        header = "Row |"
+        for angle in angles:
+            header += f" {angle} |"
+        
+        # Calculate column widths
+        col_widths = [max(len(str(val)) for val in gann_values[angle]) for angle in angles]
+        col_widths = [max(8, width) for width in col_widths]  # Minimum width
+        
+        # Find the maximum number of rows
+        max_rows = max(len(gann_values[angle]) for angle in angles)
+        
+        # Generate table
+        table = ""
+        table += header + "\n"
+        table += "-" * len(header) + "\n"
+        
+        for i in range(max_rows):
+            row = f"{i+1:3d} |"
+            for j, angle in enumerate(angles):
+                if i < len(gann_values[angle]):
+                    value = gann_values[angle][i]
+                    row += f" {value:>{col_widths[j]}} |"
+                else:
+                    row += f" {'':{col_widths[j]}} |"
+            table += row + "\n"
+        
+        return table
+		
+
+Now, let's implement the trading system runner that ties everything together:
+gann_trading_system.py - Main Trading System RunnerClick to open codeTap to openRetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.Claude can make mistakes. Please double-check responses.
+
+#!/usr/bin/env python
+"""
+Gann Square of 9 Trading System
+Main entry point for running the trading system
+"""
+
+import argparse
+import json
+import logging
+import time
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+import threading
+
+# Add the parent directory to the path if running as a script
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import custom modules
+from src.tvdata_handler import TVDataHandler
+from src.gann_calculator import GannCalculator
+from src.paper_trade_executor import PaperTradeExecutor
+from src.risk_manager import RiskManager
+from src.symbol_registry import SymbolRegistry
+from src.logger import setup_logger, TradeLogger
+
+def load_config(config_path):
+    """
+    Load configuration file
+    
+    Parameters:
+    -----------
+    config_path : str or Path
+        Path to configuration file
+        
+    Returns:
+    --------
+    dict
+        Configuration dictionary
+    """
+    with open(config_path, 'r') as f:
+        return json.load(f)
+
+def is_trading_time(current_time, trading_hours):
+    """
+    Check if current time is within trading hours
+    
+    Parameters:
+    -----------
+    current_time : datetime
+        Current time
+    trading_hours : dict
+        Dictionary with 'start' and 'end' keys for trading hours
+        
+    Returns:
+    --------
+    bool
+        True if within trading hours, False otherwise
+    """
+    weekday = current_time.weekday()
+    
+    # Weekend check (5=Saturday, 6=Sunday)
+    if weekday > 4:
+        return False
+    
+    start_time = datetime.strptime(trading_hours.get('start', '09:15'), "%H:%M").time()
+    end_time = datetime.strptime(trading_hours.get('end', '15:30'), "%H:%M").time()
+    
+    return start_time <= current_time.time() <= end_time
+
+class GannTradingSystem:
+    """
+    Main Gann Square of 9 Trading System
+    """
+    
+    def __init__(self, config_dir="config", mode="paper", debug=False):
+        """
+        Initialize the trading system
+        
+        Parameters:
+        -----------
+        config_dir : str
+            Path to configuration directory
+        mode : str
+            Trading mode ('paper' or 'live')
+        debug : bool
+            Enable debug logging
+        """
+        # Set up basic properties
+        self.config_dir = Path(config_dir
+		
+		
+		

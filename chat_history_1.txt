@@ -1,0 +1,3227 @@
+I'll read through all the code and knowledge you've provided and create a complete implementation of the Gann Square of 9 trading system step by step. Let's start by organizing the project according to the provided structure and implement each module.
+Project Structure
+First, let's establish our directory structure:
+Copygann_trading_system/
+├── config/
+│   ├── api_config.json
+│   ├── trading_config.json
+│   ├── symbols.json
+│   └── symbol_mapping_rules.json
+├── src/
+│   ├── __init__.py
+│   ├── data_handler.py
+│   ├── gann_calculator.py
+│   ├── trade_executor.py
+│   ├── paper_trade_executor.py
+│   ├── live_trade_executor.py
+│   ├── risk_manager.py
+│   ├── logger.py
+│   ├── symbol_registry.py
+│   ├── tvdata_handler.py
+│   └── option_helpers.py
+├── logs/
+├── strategy_templates/
+├── main.py
+├── gann_trading_system.py
+├── run_paper_trading.py
+├── run_live_trading.py
+└── requirements.txt
+1. Setup Requirements
+Let's start with the requirements.txt file:
+Copy# requirements.txt
+pandas==2.0.3
+numpy==1.24.3
+requests==2.31.0
+tvDatafeed==2.1.0
+matplotlib==3.7.2
+argparse==1.4.0
+algomojo==1.0.9
+pytz==2023.3
+python-dotenv==1.0.0
+2. Configuration Files
+Let's create our configuration files:
+2.1 api_config.json
+jsonCopy{
+    "api_key": "",
+    "api_secret": "",
+    "broker_code": "ab",
+    "api_base_url": "https://amapi.algomojo.com/v1"
+}
+2.2 trading_config.json
+jsonCopy{
+    "default_timeframe": "1h",
+    "default_product": "MIS",
+    "default_exchange": "NSE",
+    "order_retry_count": 3,
+    "order_retry_delay": 2,
+    "strategy_name": "Gann Square of 9",
+    "trading_hours": {
+        "start": "09:15",
+        "end": "15:30"
+    },
+    "scan_interval": 60,
+    "close_positions_on_exit": true,
+    "paper_trading": true,
+    "webhook_url": "https://amapi.algomojo.com/v1/webhook/ab/your-webhook-id/your-webhook-token/your-strategy-id/PlaceStrategyOrder",
+    "gann_parameters": {
+        "increments": [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25],
+        "num_values": 20,
+        "buffer_percentage": 0.002,
+        "include_lower": true
+    },
+    "risk_parameters": {
+        "max_risk_per_trade": 0.01,
+        "max_positions": 5,
+        "max_risk_per_symbol": 0.02,
+        "max_daily_loss": 0.05,
+        "max_drawdown": 0.1,
+        "min_risk_reward": 1.5
+    }
+}
+2.3 symbols.json
+jsonCopy{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "description": "Nifty 50 Index",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 50,
+            "exchange": "NSE",
+            "tv_symbol": "NIFTY",
+            "algomojo_symbol": "NIFTY-I"
+        },
+        {
+            "symbol": "BANKNIFTY",
+            "description": "Bank Nifty Index",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 25,
+            "exchange": "NSE",
+            "tv_symbol": "BANKNIFTY",
+            "algomojo_symbol": "BANKNIFTY-I"
+        },
+        {
+            "symbol": "FINNIFTY",
+            "description": "Financial Services Nifty",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 40,
+            "exchange": "NSE",
+            "tv_symbol": "FINNIFTY",
+            "algomojo_symbol": "FINNIFTY-I"
+        },
+        {
+            "symbol": "RELIANCE",
+            "description": "Reliance Industries Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 250,
+            "exchange": "NSE",
+            "tv_symbol": "RELIANCE",
+            "algomojo_symbol": "RELIANCE-EQ"
+        },
+        {
+            "symbol": "INFY",
+            "description": "Infosys Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 300,
+            "exchange": "NSE",
+            "tv_symbol": "INFY",
+            "algomojo_symbol": "INFY-EQ"
+        },
+        {
+            "symbol": "HDFCBANK",
+            "description": "HDFC Bank Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 550,
+            "exchange": "NSE",
+            "tv_symbol": "HDFCBANK",
+            "algomojo_symbol": "HDFCBANK-EQ"
+        }
+    ]
+}
+2.4 symbol_mapping_rules.json
+jsonCopy{
+    "rules": [
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "^([A-Z]+)$",
+            "replacement": "\\1-EQ",
+            "description": "Convert simple equity symbol to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "equity"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "^(NIFTY|BANKNIFTY|FINNIFTY)$",
+            "replacement": "\\1-I",
+            "description": "Convert index symbol to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "index"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "^([A-Z]+)-EQ$",
+            "replacement": "\\1",
+            "description": "Convert AlgoMojo equity to TradingView format",
+            "use_regex": true,
+            "apply_to": "equity"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "^([A-Z]+)-I$",
+            "replacement": "\\1",
+            "description": "Convert AlgoMojo index to TradingView format",
+            "use_regex": true,
+            "apply_to": "index"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "([A-Z]+)1!",
+            "replacement": "\\1-FUT",
+            "description": "Convert TradingView commodity futures to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "commodity"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "([A-Z]+)-FUT",
+            "replacement": "\\11!",
+            "description": "Convert AlgoMojo commodity futures to TradingView format",
+            "use_regex": true,
+            "apply_to": "commodity"
+        }
+    ]
+}
+3. Core Source Files
+Now let's implement each source file:
+3.1 src/init.py
+pythonCopy# src/__init__.py
+# Empty init file to make the directory a package
+3.2 src/logger.py
+pythonCopy# src/logger.py
+
+import logging
+import os
+import sys
+from datetime import datetime
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+
+def setup_logger():
+    """
+    Setup the logger for the Gann Trading System
+    
+    Returns:
+    --------
+    logger : logging.Logger
+        Configured logger instance
+    """
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+    
+    # Get the current date for log file
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    log_file = os.path.join(logs_dir, f'gann_trading_{current_date}.log')
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
+    if root_logger.handlers:
+        for handler in root_logger.handlers:
+            root_logger.removeHandler(handler)
+    
+    # Create a formatter
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(name)s | %(message)s')
+    
+    # Create file handler with rotation
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when='midnight',
+        interval=1,
+        backupCount=30  # Keep logs for 30 days
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    
+    # Create console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    
+    # Add handlers to root logger
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
+    # Create a system logger
+    logger = logging.getLogger('gann_trading')
+    logger.info("Logger initialized")
+    
+    return logger
+
+def get_logger(name):
+    """
+    Get a logger with the specified name
+    
+    Parameters:
+    -----------
+    name : str
+        Logger name
+        
+    Returns:
+    --------
+    logger : logging.Logger
+        Logger instance
+    """
+    return logging.getLogger(name)
+
+class TradeLogger:
+    """
+    Specialized logger for trade-related events
+    """
+    
+    def __init__(self, log_file=None):
+        """
+        Initialize the trade logger
+        
+        Parameters:
+        -----------
+        log_file : str
+            Optional path to log file
+        """
+        self.logger = logging.getLogger('gann_trading.trades')
+        
+        # If a specific log file is requested
+        if log_file:
+            logs_dir = os.path.dirname(log_file)
+            if not os.path.exists(logs_dir):
+                os.makedirs(logs_dir)
+            
+            # Create a special file handler just for trades
+            trade_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=10*1024*1024,  # 10MB
+                backupCount=100  # Keep up to 100 files
+            )
+            
+            formatter = logging.Formatter('%(asctime)s|%(levelname)s|%(message)s')
+            trade_handler.setFormatter(formatter)
+            trade_handler.setLevel(logging.INFO)
+            
+            self.logger.addHandler(trade_handler)
+    
+    def log_signal(self, symbol, timeframe, signal_type, price, gann_level):
+        """
+        Log a trading signal
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        timeframe : str
+            Timeframe of the signal
+        signal_type : str
+            Type of signal (BUY, SELL, etc.)
+        price : float
+            Current price
+        gann_level : float
+            Gann level that generated the signal
+        """
+        msg = f"SIGNAL|{symbol}|{timeframe}|{signal_type}|{price}|{gann_level}"
+        self.logger.info(msg)
+    
+    def log_order(self, symbol, order_type, action, quantity, price, order_id=None):
+        """
+        Log an order
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        order_type : str
+            Type of order (MARKET, LIMIT, etc.)
+        action : str
+            Order action (BUY, SELL)
+        quantity : int
+            Order quantity
+        price : float
+            Order price
+        order_id : str
+            Order ID (optional)
+        """
+        msg = f"ORDER|{symbol}|{order_type}|{action}|{quantity}|{price}"
+        if order_id:
+            msg += f"|{order_id}"
+        
+        self.logger.info(msg)
+    
+    def log_fill(self, symbol, action, quantity, price, order_id, fill_time=None):
+        """
+        Log an order fill
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        action : str
+            Order action (BUY, SELL)
+        quantity : int
+            Filled quantity
+        price : float
+            Fill price
+        order_id : str
+            Order ID
+        fill_time : str
+            Fill time (optional)
+        """
+        if fill_time is None:
+            fill_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        msg = f"FILL|{symbol}|{action}|{quantity}|{price}|{order_id}|{fill_time}"
+        self.logger.info(msg)
+    
+    def log_cancel(self, symbol, order_id, reason=None):
+        """
+        Log an order cancellation
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        order_id : str
+            Order ID
+        reason : str
+            Cancellation reason (optional)
+        """
+        msg = f"CANCEL|{symbol}|{order_id}"
+        if reason:
+            msg += f"|{reason}"
+        
+        self.logger.info(msg)
+    
+    def log_position(self, symbol, action, quantity, entry_price, exit_price=None, pnl=None, exit_reason=None):
+        """
+        Log a position update
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        action : str
+            Position direction (LONG, SHORT)
+        quantity : int
+            Position size
+        entry_price : float
+            Entry price
+        exit_price : float
+            Exit price (optional)
+        pnl : float
+            Realized P&L (optional)
+        exit_reason : str
+            Exit reason (optional)
+        """
+        if exit_price is None:
+            # Position open
+            msg = f"POSITION_OPEN|{symbol}|{action}|{quantity}|{entry_price}"
+        else:
+            # Position close
+            msg = f"POSITION_CLOSE|{symbol}|{action}|{quantity}|{entry_price}|{exit_price}"
+            if pnl is not None:
+                msg += f"|{pnl}"
+            if exit_reason:
+                msg += f"|{exit_reason}"
+        
+        self.logger.info(msg)
+    
+    def log_error(self, context, error_msg):
+        """
+        Log an error
+        
+        Parameters:
+        -----------
+        context : str
+            Context of the error
+        error_msg : str
+            Error message
+        """
+        msg = f"ERROR|{context}|{error_msg}"
+        self.logger.error(msg)
+    
+    def log_system(self, event_type, details):
+        """
+        Log a system event
+        
+        Parameters:
+        -----------
+        event_type : str
+            Type of system event
+        details : str
+            Event details
+        """
+        msg = f"SYSTEM|{event_type}|{details}"
+        self.logger.info(msg)
+    
+    def parse_log_file(self, log_file=None):
+        """
+        Parse a trade log file into structured data
+        
+        Parameters:
+        -----------
+        log_file : str
+            Path to log file (optional)
+            
+        Returns:
+        --------
+        dict
+            Dictionary with parsed log data
+        """
+        if log_file is None:
+            # Use the default log file
+            logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            log_file = os.path.join(logs_dir, f'gann_trading_{current_date}.log')
+        
+        # Parse the log file
+        signals = []
+        orders = []
+        fills = []
+        positions = []
+        errors = []
+        
+        try:
+            with open(log_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split('|')
+                    
+                    if len(parts) < 3:
+                        continue
+                    
+                    timestamp = parts[0]
+                    log_type = parts[2]
+                    
+                    if log_type == 'SIGNAL':
+                        signals.append({
+                            'timestamp': timestamp,
+                            'symbol': parts[3],
+                            'timeframe': parts[4],
+                            'signal_type': parts[5],
+                            'price': float(parts[6]),
+                            'gann_level': float(parts[7])
+                        })
+                    elif log_type == 'ORDER':
+                        order = {
+                            'timestamp': timestamp,
+                            'symbol': parts[3],
+                            'order_type': parts[4],
+                            'action': parts[5],
+                            'quantity': int(parts[6]),
+                            'price': float(parts[7])
+                        }
+                        if len(parts) > 8:
+                            order['order_id'] = parts[8]
+                        orders.append(order)
+                    elif log_type == 'FILL':
+                        fills.append({
+                            'timestamp': timestamp,
+                            'symbol': parts[3],
+                            'action': parts[4],
+                            'quantity': int(parts[5]),
+                            'price': float(parts[6]),
+                            'order_id': parts[7],
+                            'fill_time': parts[8] if len(parts) > 8 else timestamp
+                        })
+                    elif log_type.startswith('POSITION'):
+                        position = {
+                            'timestamp': timestamp,
+                            'type': log_type,
+                            'symbol': parts[3],
+                            'action': parts[4],
+                            'quantity': int(parts[5]),
+                            'entry_price': float(parts[6])
+                        }
+                        if log_type == 'POSITION_CLOSE' and len(parts) > 7:
+                            position['exit_price'] = float(parts[7])
+                            if len(parts) > 8:
+                                position['pnl'] = float(parts[8])
+                            if len(parts) > 9:
+                                position['exit_reason'] = parts[9]
+                        positions.append(position)
+                    elif log_type == 'ERROR':
+                        errors.append({
+                            'timestamp': timestamp,
+                            'context': parts[3],
+                            'message': parts[4]
+                        })
+        except Exception as e:
+            self.logger.error(f"Error parsing log file: {e}")
+        
+        return {
+            'signals': signals,
+            'orders': orders,
+            'fills': fills,
+            'positions': positions,
+            'errors': errors
+        }
+
+class PerformanceLogger:
+    """
+    Logger for system performance metrics
+    """
+    
+    def __init__(self, log_dir=None):
+        """
+        Initialize the performance logger
+        
+        Parameters:
+        -----------
+        log_dir : str
+            Directory for performance logs (optional)
+        """
+        self.logger = logging.getLogger('gann_trading.performance')
+        
+        if log_dir is None:
+            log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'performance')
+        
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # Create a CSV file for daily performance
+        self.daily_file = os.path.join(log_dir, 'daily_performance.csv')
+        
+        # Check if the file exists, if not create with header
+        if not os.path.exists(self.daily_file):
+            with open(self.daily_file, 'w') as f:
+                f.write('date,account_balance,daily_pnl,win_trades,loss_trades,win_rate,profit_factor\n')
+    
+    def log_daily_performance(self, account_balance, daily_pnl, win_trades, loss_trades):
+        """
+        Log daily performance metrics
+        
+        Parameters:
+        -----------
+        account_balance : float
+            End-of-day account balance
+        daily_pnl : float
+            Daily P&L
+        win_trades : int
+            Number of winning trades
+        loss_trades : int
+            Number of losing trades
+        """
+        date = datetime.now().strftime('%Y-%m-%d')
+        
+        # Calculate metrics
+        total_trades = win_trades + loss_trades
+        win_rate = win_trades / total_trades if total_trades > 0 else 0
+        profit_factor = 1.0  # Placeholder, would need more data to calculate
+        
+        # Log to logger
+        self.logger.info(f"DAILY_PERFORMANCE|{date}|{account_balance}|{daily_pnl}|{win_trades}|{loss_trades}|{win_rate}")
+        
+        # Append to CSV
+        with open(self.daily_file, 'a') as f:
+            f.write(f'{date},{account_balance},{daily_pnl},{win_trades},{loss_trades},{win_rate},{profit_factor}\n')
+    
+    def log_trade_performance(self, trade_data):
+        """
+        Log performance metrics for a single trade
+        
+        Parameters:
+        -----------
+        trade_data : dict
+            Trade data including entry, exit, P&L, etc.
+        """
+        symbol = trade_data.get('symbol', '')
+        entry_time = trade_data.get('entry_time', datetime.now())
+        exit_time = trade_data.get('exit_time', datetime.now())
+        action = trade_data.get('action', '')
+        entry_price = trade_data.get('entry_price', 0)
+        exit_price = trade_data.get('exit_price', 0)
+        quantity = trade_data.get('quantity', 0)
+        pnl = trade_data.get('pnl', 0)
+        exit_reason = trade_data.get('exit_reason', '')
+        
+        # Calculate duration
+        duration = (exit_time - entry_time).total_seconds() / 60  # in minutes
+        
+        # Log to logger
+        self.logger.info(f"TRADE_PERFORMANCE|{symbol}|{action}|{entry_price}|{exit_price}|{quantity}|{pnl}|{duration}|{exit_reason}")
+3.3 src/symbol_registry.py
+pythonCopy# src/symbol_registry.py
+
+import os
+import json
+import logging
+import re
+from datetime import datetime, timedelta
+
+class SymbolRegistry:
+    """
+    Dynamic symbol registry that handles mappings between different platforms
+    without hardcoding values
+    """
+    
+    def __init__(self, config_dir="config"):
+        """
+        Initialize the symbol registry
+        
+        Parameters:
+        -----------
+        config_dir : str
+            Directory containing configuration files
+        """
+        self.logger = logging.getLogger(__name__)
+        self.config_dir = config_dir
+        self.symbols = {}
+        self.mapping_rules = []
+        
+        # Load configurations
+        self._load_symbols()
+        self._load_mapping_rules()
+    
+    def _load_symbols(self):
+        """Load symbols from configuration file"""
+        symbols_file = os.path.join(self.config_dir, "symbols.json")
+        
+        if not os.path.exists(symbols_file):
+            self.logger.warning(f"Symbols file not found: {symbols_file}")
+            return
+        
+        try:
+            with open(symbols_file, 'r') as f:
+                data = json.load(f)
+                
+            if "symbols" in data and isinstance(data["symbols"], list):
+                for symbol_info in data["symbols"]:
+                    symbol = symbol_info.get("symbol", "")
+                    if symbol:
+                        self.symbols[symbol] = symbol_info
+                
+                self.logger.info(f"Loaded {len(self.symbols)} symbols from configuration")
+            else:
+                self.logger.warning("Invalid symbols file format")
+                
+        except Exception as e:
+            self.logger.error(f"Error loading symbols: {e}")
+    
+    def _load_mapping_rules(self):
+        """Load symbol mapping rules"""
+        rules_file = os.path.join(self.config_dir, "symbol_mapping_rules.json")
+        
+        if not os.path.exists(rules_file):
+            self.logger.warning(f"Mapping rules file not found: {rules_file}")
+            return
+        
+        try:
+            with open(rules_file, 'r') as f:
+                data = json.load(f)
+                
+            if "rules" in data and isinstance(data["rules"], list):
+                self.mapping_rules = data["rules"]
+                self.logger.info(f"Loaded {len(self.mapping_rules)} mapping rules")
+            else:
+                self.logger.warning("Invalid mapping rules file format")
+                
+        except Exception as e:
+            self.logger.error(f"Error loading mapping rules: {e}")
+    
+    def get_symbol_info(self, symbol):
+        """
+        Get information for a symbol
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol identifier
+            
+        Returns:
+        --------
+        dict
+            Symbol information or None if not found
+        """
+        # First try direct lookup
+        if symbol in self.symbols:
+            return self.symbols[symbol]
+        
+        # If not found directly, try looking up by tv_symbol or algomojo_symbol
+        for sym_key, sym_info in self.symbols.items():
+            if sym_info.get("tv_symbol") == symbol or sym_info.get("algomojo_symbol") == symbol:
+                return sym_info
+        
+        return None
+    
+    def get_all_symbols(self):
+        """
+        Get all registered symbols
+        
+        Returns:
+        --------
+        list
+            List of symbol dictionaries
+        """
+        return list(self.symbols.values())
+    
+    def map_symbol(self, symbol, from_platform, to_platform):
+        """
+        Map a symbol from one platform format to another
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol in source platform format
+        from_platform : str
+            Source platform (e.g., 'tv', 'algomojo')
+        to_platform : str
+            Target platform (e.g., 'tv', 'algomojo')
+            
+        Returns:
+        --------
+        str
+            Symbol in target platform format
+        """
+        # If platforms are the same, return as is
+        if from_platform == to_platform:
+            return symbol
+        
+        # Check for exact mapping in symbol info
+        for symbol_info in self.symbols.values():
+            source_field = f"{from_platform}_symbol"
+            target_field = f"{to_platform}_symbol"
+            
+            if symbol_info.get(source_field) == symbol and symbol_info.get(target_field):
+                return symbol_info.get(target_field)
+        
+        # Try to determine symbol type if not found in registry
+        symbol_type = self._determine_symbol_type(symbol)
+        
+        # Apply mapping rules
+        for rule in self.mapping_rules:
+            rule_from = rule.get("from")
+            rule_to = rule.get("to")
+            pattern = rule.get("pattern")
+            replacement = rule.get("replacement")
+            rule_type = rule.get("apply_to", "any")
+            
+            if rule_from == from_platform and rule_to == to_platform:
+                # Skip if rule is for specific type and doesn't match
+                if rule_type != "any" and rule_type != symbol_type:
+                    continue
+                
+                if rule.get("use_regex", False):
+                    try:
+                        # Apply regex replacement
+                        result = re.sub(pattern, replacement, symbol)
+                        if result != symbol:  # Only return if something changed
+                            self.logger.debug(f"Mapped {symbol} to {result} using regex rule")
+                            return result
+                    except Exception as e:
+                        self.logger.error(f"Regex error: {e}")
+                elif pattern in symbol:
+                    # Simple string replacement
+                    result = symbol.replace(pattern, replacement)
+                    if result != symbol:  # Only return if something changed
+                        self.logger.debug(f"Mapped {symbol} to {result} using string rule")
+                        return result
+        
+        # Apply default mapping rules if no specific rule matched
+        if from_platform == "tv" and to_platform == "algomojo":
+            # Default TV to AlgoMojo
+            if symbol_type == "equity" and not symbol.endswith("-EQ"):
+                return f"{symbol}-EQ"
+            elif symbol_type == "index" and not symbol.endswith("-I"):
+                return f"{symbol}-I"
+        elif from_platform == "algomojo" and to_platform == "tv":
+            # Default AlgoMojo to TV
+            if symbol.endswith("-EQ"):
+                return symbol[:-3]
+            elif symbol.endswith("-I"):
+                return symbol[:-2]
+        
+        # If no mapping found, log warning and return original
+        self.logger.warning(f"No mapping found for {symbol} from {from_platform} to {to_platform}")
+        return symbol
+    
+    def _determine_symbol_type(self, symbol):
+        """
+        Determine the symbol type based on characteristics
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol to analyze
+            
+        Returns:
+        --------
+        str
+            Symbol type ('equity', 'index', 'option', 'commodity')
+        """
+        # Check for known indices
+        if symbol in ["NIFTY", "BANKNIFTY", "FINNIFTY"] or symbol.endswith("-I"):
+            return "index"
+        
+        # Check for options
+        if "CE" in symbol or "PE" in symbol or "-CE" in symbol or "-PE" in symbol:
+            return "option"
+        
+        # Check for commodities
+        if symbol.endswith("1!") or symbol.startswith("MCX:") or "FUT" in symbol:
+            return "commodity"
+        
+        # Check for equities with -EQ suffix
+        if symbol.endswith("-EQ"):
+            return "equity"
+        
+        # Default to equity for simple symbols
+        if symbol.isalpha():
+            return "equity"
+        
+        # Unknown
+        return "unknown"
+    
+    def get_nearest_strike(self, symbol, price, round_up=False):
+        """
+        Get the nearest option strike price
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol name
+        price : float
+            Current price
+        round_up : bool
+            Whether to round up (True) or down (False)
+            
+        Returns:
+        --------
+        float
+            Nearest strike price
+        """
+        # Get symbol info to find specific strike interval
+        symbol_info = self.get_symbol_info(symbol)
+        
+        # Default strike intervals
+        if symbol in ["NIFTY", "RetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going. Claude does not have the ability to run the code it generates yet.Mwrite code from here # Default strike intervals if symbol in ["NIFTY", "EditDefault strike intervals
+Copy    if symbol in ["NIFTY", "NIFTY50"] or (symbol_info and symbol_info.get("symbol") in ["NIFTY", "NIFTY50"]):
+        interval = 50
+    elif symbol in ["BANKNIFTY", "NIFTYBANK"] or (symbol_info and symbol_info.get("symbol") in ["BANKNIFTY", "NIFTYBANK"]):
+        interval = 100
+    elif symbol in ["FINNIFTY"] or (symbol_info and symbol_info.get("symbol") in ["FINNIFTY"]):
+        interval = 50
+    elif symbol in ["CRUDEOIL"] or (symbol_info and symbol_info.get("symbol") in ["CRUDEOIL"]):
+        interval = 50  # Example interval for crude oil
+    elif symbol in ["GOLD"] or (symbol_info and symbol_info.get("symbol") in ["GOLD"]):
+        interval = 100  # Example interval for gold
+    else:
+        # For stocks, use percentage of price
+        price_percent = price * 0.01
+        
+        if price_percent < 5:
+            interval = 5
+        elif price_percent < 10:
+            interval = 10
+        elif price_percent < 25:
+            interval = 25
+        elif price_percent < 50:
+            interval = 50
+        else:
+            interval = 100
+    
+    # Calculate nearest strike
+    if round_up:
+        return round(price / interval + 0.5) * interval  # Round up
+    else:
+        return round(price / interval) * interval  # Round to nearest
+
+def get_expiry_date(self, symbol_type="equity", reference_date=None):
+    """
+    Get the appropriate expiry date
+    
+    Parameters:
+    -----------
+    symbol_type : str
+        Symbol type (index or equity)
+    reference_date : datetime
+        Reference date (defaults to current date)
+        
+    Returns:
+    --------
+    str
+        Expiry date formatted for trading platform
+    """
+    if reference_date is None:
+        reference_date = datetime.now()
+    
+    if symbol_type == "index":
+        # For indexes, get the nearest weekly expiry (usually Thursday)
+        days_to_thursday = (3 - reference_date.weekday()) % 7
+        
+        # If today is Thursday and it's past market close, get next week
+        if days_to_thursday == 0 and reference_date.hour >= 15:
+            days_to_thursday = 7
+        
+        expiry_date = reference_date + timedelta(days=days_to_thursday)
+    else:
+        # For equities, get the monthly expiry (last Thursday of the month)
+        
+        # Get the last day of the current month
+        if reference_date.month == 12:
+            last_day = datetime(reference_date.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            last_day = datetime(reference_date.year, reference_date.month + 1, 1) - timedelta(days=1)
+        
+        # Find the last Thursday
+        days_to_subtract = (last_day.weekday() - 3) % 7
+        last_thursday = last_day - timedelta(days=days_to_subtract)
+        
+        # If the last Thursday has passed, use the last Thursday of next month
+        if last_thursday < reference_date:
+            if reference_date.month == 12:
+                last_day = datetime(reference_date.year + 1, 2, 1) - timedelta(days=1)
+            else:
+                last_day = datetime(reference_date.year, reference_date.month + 2, 1) - timedelta(days=1)
+            
+            days_to_subtract = (last_day.weekday() - 3) % 7
+            last_thursday = last_day - timedelta(days=days_to_subtract)
+        
+        expiry_date = last_thursday
+    
+    # Format the expiry date according to broker requirements (e.g., "23JUN")
+    return expiry_date.strftime("%d%b").upper()
+
+def get_commodity_expiry(self, symbol, current_date=None):
+    """
+    Get the current active commodity expiry
+    
+    Parameters:
+    -----------
+    symbol : str
+        Commodity symbol
+    current_date : datetime
+        Reference date (defaults to current date)
+        
+    Returns:
+    --------
+    str
+        Expiry date in the format required for trading platform
+    """
+    if current_date is None:
+        current_date = datetime.now()
+    
+    # Commodity-specific expiry calendar
+    # Different commodities have different expiry patterns
+    commodity_expiry_calendar = {
+        "CRUDEOIL": {
+            "day_pattern": "19",  # Usually expires on 19th
+            "month_offset": 0     # Current month
+        },
+        "GOLD": {
+            "day_pattern": "5",   # Usually expires on 5th 
+            "month_offset": 1     # Next month
+        },
+        "SILVER": {
+            "day_pattern": "5",   # Usually expires on 5th
+            "month_offset": 1     # Next month
+        },
+        # Add more commodities as needed
+    }
+    
+    # Get base symbol without suffixes
+    base_symbol = symbol.split('-')[0].split(':')[-1]
+    
+    if base_symbol in commodity_expiry_calendar:
+        pattern = commodity_expiry_calendar[base_symbol]
+        
+        # Calculate expiry month
+        expiry_month = current_date.month + pattern["month_offset"]
+        expiry_year = current_date.year
+        
+        if expiry_month > 12:
+            expiry_month -= 12
+            expiry_year += 1
+        
+        # Determine day based on pattern
+        day_pattern = pattern["day_pattern"]
+        
+        if day_pattern.isdigit():
+            # Fixed day of month
+            day = int(day_pattern)
+        else:
+            # Complex pattern (like "last Thursday")
+            # Implementation would go here
+            day = 15  # Default fallback
+        
+        # Format expiry date
+        expiry_date = datetime(expiry_year, expiry_month, day)
+        
+        # Format according to trading platform requirements (e.g., "JUN23")
+        return expiry_date.strftime("%d%b").upper()
+    
+    # Default fallback - current month
+    next_month = current_date.month + 1
+    next_year = current_date.year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+    
+    last_day = (datetime(next_year, next_month, 1) - timedelta(days=1)).day
+    expiry_date = datetime(current_date.year, current_date.month, last_day)
+    
+    return expiry_date.strftime("%d%b").upper()RetryClaude does not have the ability to run the code it generates yet.MIs it completed ?EditNo, this is just a continuation of the symbol_registry.py file. We need to complete several other essential files for the Gann trading system. Let me continue implementing the remaining modules:
+3.4 src/gann_calculator.py
+pythonCopy# src/gann_calculator.py
+
+import math
+import logging
+import numpy as np
+import pandas as pd
+
+class GannCalculator:
+    """
+    Implements the Gann Square of 9 calculation for trading signals
+    """
+    
+    def __init__(self, gann_params):
+        """
+        Initialize the Gann calculator with parameters
+        
+        Parameters:
+        -----------
+        gann_params : dict
+            Dictionary containing Gann Square of 9 parameters
+            - increments: list of increments for different angles
+            - num_values: number of values to generate per angle
+            - buffer_percentage: percentage buffer for stoploss calculation
+        """
+        self.logger = logging.getLogger(__name__)
+        self.increments = gann_params.get('increments', [0.125, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25])
+        self.num_values = gann_params.get('num_values', 20)
+        self.buffer_percentage = gann_params.get('buffer_percentage', 0.002)
+        self.include_lower = gann_params.get('include_lower', True)
+        
+    def calculate(self, price):
+        """
+        Calculate Gann Square of 9 levels for a given price
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for (typically previous candle close)
+            
+        Returns:
+        --------
+        dict
+            Dictionary containing Gann levels and targets
+        """
+        try:
+            self.logger.info(f"Calculating Gann Square of 9 for price: {price}")
+            
+            # Generate Gann values for different angles
+            gann_values = self._gann_square_of_9(price)
+            
+            # Find buy above and sell below levels (0° angle)
+            buy_level_0, sell_level_0 = self._find_buy_sell_levels(price, {'0°': gann_values['0°']})
+            
+            if not buy_level_0 or not sell_level_0:
+                self.logger.warning(f"Could not find buy/sell levels for price {price}")
+                return None
+            
+            # Get targets from various angles
+            buy_targets, sell_targets = self._get_unique_targets_from_angles(
+                buy_level_0[1],
+                gann_values,
+                8,  # Number of target levels
+                price,
+                sell_level_0[1]
+            )
+            
+            # Calculate stoploss levels
+            long_stoploss, short_stoploss = self._calculate_stoploss(
+                buy_level_0, 
+                sell_level_0, 
+                self.buffer_percentage
+            )
+            
+            # Prepare results
+            results = {
+                "price": price,
+                "buy_above": buy_level_0[1],
+                "sell_below": sell_level_0[1],
+                "buy_targets": [value for _, value in buy_targets],
+                "sell_targets": [value for _, value in sell_targets],
+                "stoploss_long": long_stoploss,
+                "stoploss_short": short_stoploss,
+                "gann_values": gann_values
+            }
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error in Gann calculation: {e}")
+            return None
+    
+    def _gann_square_of_9(self, price):
+        """
+        Generates Gann Square of 9 levels for different angles.
+        
+        Original implementation from the provided code.
+        """
+        gann_values = {}
+        angles = ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']
+
+        root = math.sqrt(price)
+        base = math.floor(root)
+        central_value = base * base
+
+        for angle, increment in zip(angles, self.increments):
+            gann_values[angle] = []
+            is_cardinal = angle.replace('°', '').isdigit() and int(angle.replace('°', '')) % 90 == 0
+            base_mult = 1.0 if is_cardinal else 1.125
+
+            if self.include_lower:
+                lower_count = self.num_values // 2
+                for i in range(lower_count, 0, -1):
+                    if is_cardinal:
+                        val = base - (i * increment)
+                        if val > 0:
+                            squared = val * val
+                            gann_values[angle].insert(0, round(squared, 2))
+                    else:
+                        val = base - (i * increment * base_mult)
+                        if val > 0:
+                            squared = val * val
+                            gann_values[angle].insert(0, round(squared, 2))
+
+            gann_values[angle].append(round(central_value, 2))
+
+            for i in range(1, self.num_values + 1):
+                if is_cardinal:
+                    val = base + (i * increment)
+                    squared = val * val
+                else:
+                    val = base + (i * increment * base_mult)
+                    squared = val * val
+                gann_values[angle].append(round(squared, 2))
+
+        return gann_values
+    
+    def _find_buy_sell_levels(self, price, gann_values):
+        """
+        Finds the nearest Buy and Sell levels from the 0° angle.
+        
+        Original implementation from the provided code.
+        """
+        buy_above = None
+        sell_below = None
+        closest_above = None
+        closest_below = None
+
+        if '0°' in gann_values:
+            for value in gann_values['0°']:
+                if value > price and (closest_above is None or value < closest_above):
+                    closest_above = value
+                    buy_above = ('0°', value)
+                if value < price and (closest_below is None or value > closest_below):
+                    closest_below = value
+                    sell_below = ('0°', value)
+
+        return buy_above, sell_below
+    
+    def _get_unique_targets_from_angles(self, entry_value, gann_values, num_levels, current_price, sell_below_value):
+        """
+        Fetch unique buy and sell targets, ensuring unique buy targets per angle.
+        
+        Original implementation from the provided code.
+        """
+        angles = ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']
+        buy_targets = []
+        sell_targets = []
+        used_values_buy = set()
+        used_values_sell = set()
+
+        # Buy targets: Ensure unique values, one per angle
+        for angle in angles:
+            values_above = [v for v in gann_values[angle] if v > entry_value and v not in used_values_buy]
+            if values_above:
+                closest_above = min(values_above)
+                buy_targets.append((angle, closest_above))
+                used_values_buy.add(closest_above)
+
+        # Sell targets: Start with central value, then unique below sell_below_value
+        central_value = math.floor(math.sqrt(current_price)) ** 2
+        if central_value < sell_below_value:
+            sell_targets.append(('0°', central_value))
+            used_values_sell.add(central_value)
+
+        for angle in angles:
+            values_below = [v for v in gann_values[angle] if v < sell_below_value and v not in used_values_sell]
+            if values_below:
+                highest_below = max(values_below)
+                sell_targets.append((angle, highest_below))
+                used_values_sell.add(highest_below)
+
+        # Sort and limit to num_levels
+        buy_targets = sorted(buy_targets, key=lambda x: x[1])[:num_levels]
+        sell_targets = sorted(sell_targets, key=lambda x: x[1], reverse=True)[:num_levels]
+
+        return buy_targets, sell_targets
+    
+    def _calculate_stoploss(self, buy_above, sell_below, buffer_percentage):
+        """
+        Calculate stoploss for long and short trades.
+        
+        Original implementation from the provided code.
+        """
+        long_stoploss = round(sell_below[1] * (1 - buffer_percentage), 2) if sell_below else None
+        short_stoploss = round(buy_above[1] * (1 + buffer_percentage), 2) if buy_above else None
+        return long_stoploss, short_stoploss
+    
+    def generate_visualization(self, price):
+        """
+        Generate visualization data for Gann levels (for UI display)
+        
+        Parameters:
+        -----------
+        price : float
+            Price to calculate Gann levels for
+            
+        Returns:
+        --------
+        dict
+            Dictionary containing visualization data
+        """
+        try:
+            # Calculate Gann levels
+            results = self.calculate(price)
+            if not results:
+                return None
+                
+            # Prepare visualization data
+            visualization_data = {
+                "price": price,
+                "angles": [],
+                "buy_above": results["buy_above"],
+                "sell_below": results["sell_below"],
+                "buy_targets": results["buy_targets"][:3],
+                "sell_targets": results["sell_targets"][:3]
+            }
+            
+            # Format angle data for visualization
+            for angle in ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°']:
+                angle_data = {
+                    "angle": angle,
+                    "values": results["gann_values"][angle][:10]  # First 10 values for display
+                }
+                visualization_data["angles"].append(angle_data)
+                
+            return visualization_data
+            
+        except Exception as e:
+            self.logger.error(f"Error generating visualization: {e}")
+            return None
+3.5 src/tvdata_handler.py
+pythonCopy# src/tvdata_handler.py
+
+import logging
+import pandas as pd
+from datetime import datetime, timedelta
+import time
+from pathlib import Path
+from src.symbol_registry import SymbolRegistry
+
+class TVDataHandler:
+    """
+    Data handler that uses tvDatafeed to get TradingView data
+    """
+    
+    def __init__(self, config_dir="config"):
+        """
+        Initialize the TV data handler
+        
+        Parameters:
+        -----------
+        config_dir : str
+            Directory containing configuration files
+        """
+        self.logger = logging.getLogger(__name__)
+        self.config_dir = Path(config_dir)
+        self.symbol_registry = SymbolRegistry(config_dir)
+        
+        try:
+            # Import tvDatafeed
+            from tvDatafeed import TvDatafeed, Interval
+            
+            # Store interval mappings
+            self.intervals = {
+                "1m": Interval.in_1_minute,
+                "3m": Interval.in_3_minute,
+                "5m": Interval.in_5_minute,
+                "15m": Interval.in_15_minute,
+                "30m": Interval.in_30_minute,
+                "45m": Interval.in_45_minute,
+                "1h": Interval.in_1_hour,
+                "2h": Interval.in_2_hour,
+                "3h": Interval.in_3_hour,
+                "4h": Interval.in_4_hour,
+                "1d": Interval.in_daily,
+                "1w": Interval.in_weekly,
+                "1M": Interval.in_monthly
+            }
+            
+            # Initialize TvDatafeed (no login required for basic data)
+            self.tv = TvDatafeed()
+            self.logger.info("TvDatafeed initialized successfully")
+            
+        except ImportError:
+            self.logger.error("tvDatafeed not installed. Install with: pip install tvDatafeed")
+            raise
+    
+    def get_previous_candle(self, symbol, exchange="NSE", timeframe="1h", adjust_symbol=True):
+        """
+        Get the previous completed candle for a symbol
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        exchange : str
+            Exchange (default: NSE)
+        timeframe : str
+            Timeframe (1m, 5m, 15m, 1h, 1d, etc.)
+        adjust_symbol : bool
+            Whether to adjust symbol format for TradingView
+            
+        Returns:
+        --------
+        dict
+            Previous candle data with OHLCV values
+        """
+        try:
+            # Convert from AlgoMojo format to TradingView format if needed
+            if adjust_symbol:
+                tv_symbol = self.symbol_registry.map_symbol(symbol, "algomojo", "tv")
+            else:
+                tv_symbol = symbol
+            
+            # Log the conversion
+            if tv_symbol != symbol:
+                self.logger.debug(f"Converted symbol for TradingView: {symbol} -> {tv_symbol}")
+            
+            # Convert timeframe to lowercase for consistency
+            timeframe = timeframe.lower()
+            
+            # Map to tvDatafeed interval
+            if timeframe in self.intervals:
+                interval = self.intervals[timeframe]
+            else:
+                self.logger.warning(f"Unknown timeframe: {timeframe}, defaulting to 1h")
+                interval = self.intervals["1h"]
+            
+            # Handle special exchange mappings for commodities
+            if exchange == "MCX":
+                # For MCX symbols, use MCX prefix in TradingView
+                if not tv_symbol.startswith("MCX:") and not tv_symbol.endswith("1!"):
+                    tv_symbol = f"MCX:{tv_symbol}"
+            
+            # Get data from TradingView - fetch a few candles to ensure we have the previous one
+            data = self.tv.get_hist(
+                symbol=tv_symbol,
+                exchange=exchange,
+                interval=interval,
+                n_bars=5  # Get 5 bars to ensure we have the previous completed candle
+            )
+            
+            if data is None or len(data) < 2:
+                self.logger.error(f"Could not retrieve data for {tv_symbol}:{exchange} on {timeframe}")
+                return None
+            
+            # Get the previous candle (second to last in the dataframe)
+            prev_candle = data.iloc[-2]
+            
+            # Convert to dictionary
+            candle_dict = {
+                'open': float(prev_candle['open']),
+                'high': float(prev_candle['high']),
+                'low': float(prev_candle['low']),
+                'close': float(prev_candle['close']),
+                'volume': float(prev_candle['volume']),
+                'timestamp': prev_candle.name.to_pydatetime()  # Convert index to datetime
+            }
+            
+            self.logger.info(f"Retrieved previous candle for {tv_symbol}:{exchange} on {timeframe}")
+            return candle_dict
+            
+        except Exception as e:
+            self.logger.error(f"Error getting previous candle for {symbol}: {e}")
+            return None
+    
+    def get_current_price(self, symbol, exchange="NSE", adjust_symbol=True):
+        """
+        Get the current market price for a symbol
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        exchange : str
+            Exchange (default: NSE)
+        adjust_symbol : bool
+            Whether to adjust symbol format for TradingView
+            
+        Returns:
+        --------
+        float
+            Current market price
+        """
+        try:
+            # Convert from AlgoMojo format to TradingView format if needed
+            if adjust_symbol:
+                tv_symbol = self.symbol_registry.map_symbol(symbol, "algomojo", "tv")
+            else:
+                tv_symbol = symbol
+            
+            # Log the conversion
+            if tv_symbol != symbol:
+                self.logger.debug(f"Converted symbol for TradingView: {symbol} -> {tv_symbol}")
+            
+            # Handle special exchange mappings for commodities
+            if exchange == "MCX":
+                # For MCX symbols, use MCX prefix in TradingView
+                if not tv_symbol.startswith("MCX:") and not tv_symbol.endswith("1!"):
+                    tv_symbol = f"MCX:{tv_symbol}"
+            
+            # Get the most recent 1-minute candle
+            data = self.tv.get_hist(
+                symbol=tv_symbol,
+                exchange=exchange,
+                interval=self.intervals["1m"],
+                n_bars=1
+            )
+            
+            if data is None or len(data) < 1:
+                self.logger.error(f"Could not retrieve current price for {tv_symbol}:{exchange}")
+                return None
+            
+            # Get the closing price of the most recent candle
+            current_price = float(data.iloc[-1]['close'])
+            
+            return current_price
+            
+        except Exception as e:
+            self.logger.error(f"Error getting current price for {symbol}: {e}")
+            return None
+    
+    def get_historical_data(self, symbol, timeframe="1d", limit=50, exchange="NSE", adjust_symbol=True):
+        """
+        Get historical price data for a symbol
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        timeframe : str
+            Time interval (1m, 5m, 15m, 1h, 1d, etc.)
+        limit : int
+            Number of candles to retrieve
+        exchange : str
+            Exchange (default: NSE)
+        adjust_symbol : bool
+            Whether to adjust symbol format for TradingView
+            
+        Returns:
+        --------
+        pandas.DataFrame
+            DataFrame with historical price data
+        """
+        try:
+            # Convert from AlgoMojo format to TradingView format if needed
+            if adjust_symbol:
+                tv_symbol = self.symbol_registry.map_symbol(symbol, "algomojo", "tv")
+            else:
+                tv_symbol = symbol
+            
+            # Convert timeframe to lowercase for consistency
+            timeframe = timeframe.lower()
+            
+            # Map to tvDatafeed interval
+            if timeframe in self.intervals:
+                interval = self.intervals[timeframe]
+            else:
+                self.logger.warning(f"Unknown timeframe: {timeframe}, defaulting to 1d")
+                interval = self.intervals["1d"]
+            
+            # Handle special exchange mappings for commodities
+            if exchange == "MCX":
+                # For MCX symbols, use MCX prefix in TradingView
+                if not tv_symbol.startswith("MCX:") and not tv_symbol.endswith("1!"):
+                    tv_symbol = f"MCX:{tv_symbol}"
+            
+            # Get data from TradingView
+            data = self.tv.get_hist(
+                symbol=tv_symbol,
+                exchange=exchange,
+                interval=interval,
+                n_bars=limit
+            )
+            
+            if data is None:
+                self.logger.error(f"Could not retrieve historical data for {tv_symbol}:{exchange} on {timeframe}")
+                return None
+            
+            self.logger.info(f"Retrieved historical data for {tv_symbol}:{exchange} on {timeframe} ({len(data)} candles)")
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Error getting historical data for {symbol}: {e}")
+            return None
+            
+    def get_exchange_info(self, exchange="NSE"):
+        """
+        Get exchange information
+        
+        Parameters:
+        -----------
+        exchange : str
+            Exchange identifier
+            
+        Returns:
+        --------
+        dict
+            Exchange information
+        """
+        # Trading hours for common Indian exchanges
+        exchange_hours = {
+            "NSE": {
+                "open": "09:15",
+                "close": "15:30",
+                "timezone": "Asia/Kolkata",
+                "is_open": self._is_exchange_open("NSE")
+            },
+            "BSE": {
+                "open": "09:15",
+                "close": "15:30",
+                "timezone": "Asia/Kolkata",
+                "is_open": self._is_exchange_open("BSE")
+            },
+            "NFO": {
+                "open": "09:15",
+                "close": "15:30",
+                "timezone": "Asia/Kolkata",
+                "is_open": self._is_exchange_open("NFO")
+            },
+            "MCX": {
+                "open": "09:00",
+                "close": "23:30",
+                "timezone": "Asia/Kolkata",
+                "is_open": self._is_exchange_open("MCX")
+            }
+        }
+        
+        return exchange_hours.get(exchange, {
+            "open": "09:15",
+            "close": "15:30",
+            "timezone": "Asia/Kolkata",
+            "is_open": False
+        })
+    
+    def _is_exchange_open(self, exchange):
+        """
+        Check if an exchange is currently open
+        
+        Parameters:
+        -----------
+        exchange : str
+            Exchange identifier
+            
+        Returns:
+        --------
+        bool
+            True if exchange is open, False otherwise
+        """
+        # Get current time in India
+        try:
+            import pytz
+            india_tz = pytz.timezone("Asia/Kolkata")
+            now = datetime.now(india_tz)
+        except ImportError:
+            # Fallback if pytz is not available
+            now = datetime.now()
+        
+        # Check if it's a weekday (0=Monday, 4=Friday)
+        if now.weekday() > 4:
+            return False
+        
+        # Get exchange hours
+        if exchange == "MCX":
+            # MCX has different trading hours
+            market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            market_close = now.replace(hour=23, minute=30, second=0, microsecond=0)
+        else:
+            # Standard NSE/BSE hours
+            market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        
+        return market_open <= now <= market_close
+3.6 src/risk_manager.py
+pythonCopy# src/risk_manager.py
+
+import logging
+import math
+from datetime import datetime, timedelta
+
+class RiskManager:
+    """
+    Handles risk management, position sizing, and money management
+    """
+    
+    def __init__(self, risk_params):
+        """
+        Initialize the risk manager with risk parameters
+        
+        Parameters:
+        -----------
+        risk_params : dict
+            Dictionary containing risk management parameters
+            - max_risk_per_trade: Maximum risk per trade as % of account (e.g., 0.01 for 1%)
+            - max_positions: Maximum number of concurrent positions
+            - max_risk_per_symbol: Maximum risk per symbol as % of account
+            - max_daily_loss: Maximum daily loss as % of account
+            - max_drawdown: Maximum drawdown as % of account
+            - min_risk_reward: Minimum risk-reward ratio for trades
+        """
+        self.logger = logging.getLogger(__name__)
+        
+        # Set risk parameters with defaults
+        self.max_risk_per_trade = risk_params.get('max_risk_per_trade', 0.01)  # 1% risk per trade
+        self.max_positions = risk_params.get('max_positions', 5)
+        self.max_risk_per_symbol = risk_params.get('max_risk_per_symbol', 0.02)  # 2% risk per symbol
+        self.max_daily_loss = risk_params.get('max_daily_loss', 0.05)  # 5% max daily loss
+        self.max_drawdown = risk_params.get('max_drawdown', 0.10)  # 10% max drawdown
+        self.min_risk_reward = risk_params.get('min_risk_reward', 1.5)  # 1.5:1 risk-reward
+        
+        # Track positions and performance
+        self.positions = {}
+        self.daily_pnl = 0
+        self.account_high = 0
+        self.current_drawdown = 0
+        self.trade_history = []
+        
+        # Date tracking
+        self.current_date = datetime.now().date()
+    
+    def calculate_position_size(self, account_balance, entry_price, stop_loss):
+        """
+        Calculate position size based on risk parameters
+        
+        Parameters:
+        -----------
+        account_balance : float
+            Current account balance
+        entry_price : float
+            Entry price
+        stop_loss : float
+            Stop loss price
+            
+        Returns:
+        --------
+        int
+            Position size (number of shares/contracts)
+        """
+        try:
+            # If no stop loss is provided, cannot calculate position size
+            if stop_loss is None or stop_loss == 0 or entry_price == 0:
+                self.logger.warning("Invalid stop loss or entry price, cannot calculate position size")
+                return 0
+            
+            # Calculate risk per share
+            risk_per_unit = abs(entry_price - stop_loss)
+            
+            if risk_per_unit == 0:
+                self.logger.warning("Risk per unit is zero, cannot calculate position size")
+                return 0
+            
+            # Calculate maximum risk amount
+            risk_amount = account_balance * self.max_risk_per_trade
+            
+            # Calculate position size based on risk
+            position_size = risk_amount / risk_per_unit
+            
+            # Round down to nearest integer
+            position_size = math.floor(position_size)
+            
+            # Log calculation details
+            self.logger.info(f"Position size calculation: Account={account_balance}, Risk={self.max_risk_per_trade*100}%, "
+                            f"Entry={entry_price}, Stop={stop_loss}, Units={position_size}")
+            
+            return position_size
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating position size: {e}")
+            return 0
+    
+    def can_place_trade(self, symbol, action, quantity, entry_price, stop_loss, target_price=None):
+        """
+        Check if a trade can be placed based on risk parameters
+        
+        Parameters:
+        -----------
+        symbol : str
+            Trading symbol
+        action : str
+            "BUY" or "SELL"
+        quantity : int
+            Order quantity
+        entry_price : float
+            Entry price
+        stop_loss : float
+            Stop loss price
+        target_price : float
+            Target price (optional)
+            
+        Returns:
+        --------
+        tuple
+            (bool, str) - (Can place trade, reason if not)
+        """
+        try:
+            # Check daily loss limit
+            if self.daily_pnl < -self.max_daily_loss:
+                return False, f"Daily loss limit of {self.max_daily_loss*100}% reached"
+            
+            # Check drawdown limit
+            if self.current_drawdown > self.max_drawdown:
+                return False, f"Max drawdown of {self.max_drawdown*100}% reached"
+            
+            # Check maximum number of positions
+            if len(self.positions) >= self.max_positions:
+                return False, f"Maximum number of positions ({self.max_positions}) reached"
+            
+            # Check risk-reward ratio if target price is provided
+            if target_price is not None:
+                risk = abs(entry_price - stop_loss)
+                reward = abs(target_price - entry_price)
+                
+                if risk == 0:
+                    return False, "Invalid risk (zero)"
+                
+                risk_reward = reward / risk
+                
+                if risk_reward < self.min_risk_reward:
+                    return False, f"Risk-reward ratio ({risk_reward:.2f}) below minimum ({self.min_risk_reward})"
+            
+            # Check risk per symbol
+            # TODO: Implement symbol-specific risk tracking
+            
+            # All checks passed
+            return True, "Trade permitted"
+            
+        except Exception as e:
+            self.logger.error(f"Error checking trade permission: {e}")
+            return False, f"Error in risk check: {str(e)}"
+    
+    def register_position(self, order_id, symbol, action, quantity, entry_price, stop_loss, target_price=None):
+        """
+        Register a new position with the risk manager
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+        symbol : str
+            Trading symbol
+        action : str
+            "BUY" or "SELL"
+        quantity : int
+            Position size
+        entry_price : float
+            Entry price
+        stop_loss : float
+            Stop loss price
+        target_price : float
+            Target price (optional)
+        """
+        position = {
+            'order_id': order_id,
+            'symbol': symbol,
+            'action': action,
+            'quantity': quantity,
+            'entry_price': entry_price,
+            'current_price': entry_price,
+            'stop_loss': stop_loss,
+            'target_price': target_price,
+            'entry_time': datetime.now(),
+            'open_pnl': 0,
+            'status': 'OPEN'
+        }
+        
+        self.positions[order_id] = position
+        self.logger.info(f"Position registered: {symbol} {action} {quantity} @ {entry_price}")
+    
+    def update_position(self, order_id, current_price, stop_loss=None, target_price=None):
+        """
+        Update an existing position
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+        current_price : float
+            Current market price
+        stop_loss : float
+            New stop loss price (optional)
+        target_price : float
+            New target price (optional)
+            
+        Returns:
+        --------
+        dict
+            Updated position information
+        """
+        if order_id not in self.positions:
+            self.logger.warning(f"Position {order_id} not found for update")
+            return None
+        
+        position = self.positions[order_id]
+        
+        # Update price and PnL
+        position['current_price'] = current_price
+        
+        # Calculate open P&L
+        if position['action'] == 'BUY':
+            position['open_pnl'] = (current_price - position['entry_price']) * position['quantity']
+        else:  # SELL
+            position['open_pnl'] = (position['entry_price'] - current_price) * position['quantity']
+        
+        # Update stop loss if provided
+        if stop_loss is not None:
+            position['stop_loss'] = stop_loss
+        
+        # Update target price if provided
+        if target_price is not None:
+            position['target_price'] = target_price
+        
+        self.logger.debug(f"Position updated: {order_id}, Price: {current_price}, P&L: {position['open_pnl']}")
+        
+        return position
+    
+    def close_position(self, order_id, exit_price, exit_reason):
+        """
+        Close a position and update performance metrics
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+        exit_price : float
+            Exit price
+        exit_reason : str
+            Reason for exit (e.g., "Stop Loss", "Target", "Manual")
+            
+        Returns:
+        --------
+        dict
+            Closed position information
+        """
+        if order_id not in self.positions:
+            self.logger.warning(f"Position {order_id} not found for closing")
+            return None
+        
+        position = self.positions[order_id]
+        
+        # Calculate realized P&L
+        if position['action'] == 'BUY':
+            realized_pnl = (exit_price - position['entry_price']) * position['quantity']
+        else:  # SELL
+            realized_pnl = (position['entry_price'] - exit_price) * position['quantity']
+        
+        # Update position
+        position['exit_price'] = exit_price
+        position['exit_time'] = datetime.now()
+        position['exit_reason'] = exit_reason
+        position['realized_pnl'] = realized_pnl
+        positionRetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going. Claude does not have the ability to run the code it generates yet.M# Update position
+        position['exit_price'] = exit_price
+        position['exit_time'] = datetime.now()
+        position['exit_reason'] = exit_reason
+        position['realized_pnl'] = realized_pnl
+        positionWrite code from hereEditUpdate position
+Copy    position['exit_price'] = exit_price
+    position['exit_time'] = datetime.now()
+    position['exit_reason'] = exit_reason
+    position['realized_pnl'] = realized_pnl
+    position['status'] = 'CLOSED'
+    
+    # Update daily P&L
+    self.daily_pnl += realized_pnl
+    
+    # Record trade in history
+    self.trade_history.append({
+        'order_id': order_id,
+        'symbol': position['symbol'],
+        'action': position['action'],
+        'entry_price': position['entry_price'],
+        'exit_price': exit_price,
+        'quantity': position['quantity'],
+        'entry_time': position['entry_time'],
+        'exit_time': position['exit_time'],
+        'pnl': realized_pnl,
+        'exit_reason': exit_reason
+    })
+    
+    # Remove from active positions
+    del self.positions[order_id]
+    
+    self.logger.info(f"Position closed: {order_id}, Exit: {exit_price}, P&L: {realized_pnl}, Reason: {exit_reason}")
+    
+    return position
+
+def update_account_metrics(self, account_balance):
+    """
+    Update account metrics for risk management
+    
+    Parameters:
+    -----------
+    account_balance : float
+        Current account balance
+    """
+    # Check if it's a new day
+    today = datetime.now().date()
+    if today != self.current_date:
+        # Reset daily tracking
+        self.daily_pnl = 0
+        self.current_date = today
+    
+    # Update account high water mark
+    if account_balance > self.account_high:
+        self.account_high = account_balance
+    
+    # Calculate current drawdown
+    if self.account_high > 0:
+        self.current_drawdown = (self.account_high - account_balance) / self.account_high
+    
+    self.logger.debug(f"Account metrics updated: Balance={account_balance}, "
+                     f"Daily P&L={self.daily_pnl}, Drawdown={self.current_drawdown*100:.2f}%")
+
+def get_position_status(self, order_id):
+    """
+    Get status of a specific position
+    
+    Parameters:
+    -----------
+    order_id : str
+        Order ID
+        
+    Returns:
+    --------
+    dict
+        Position information
+    """
+    if order_id in self.positions:
+        return self.positions[order_id]
+    else:
+        # Check in trade history
+        for trade in self.trade_history:
+            if trade['order_id'] == order_id:
+                return trade
+        
+        return None
+
+def get_active_positions(self):
+    """
+    Get all active positions
+    
+    Returns:
+    --------
+    dict
+        Dictionary of active positions
+    """
+    return self.positions
+
+def get_positions_by_symbol(self, symbol):
+    """
+    Get active positions for a specific symbol
+    
+    Parameters:
+    -----------
+    symbol : str
+        Trading symbol
+        
+    Returns:
+    --------
+    list
+        List of positions for the symbol
+    """
+    return [p for p in self.positions.values() if p['symbol'] == symbol]
+
+def get_trade_statistics(self):
+    """
+    Get trade statistics
+    
+    Returns:
+    --------
+    dict
+        Dictionary with trade statistics
+    """
+    if not self.trade_history:
+        return {
+            'total_trades': 0,
+            'win_rate': 0,
+            'avg_profit': 0,
+            'avg_loss': 0,
+            'profit_factor': 0,
+            'avg_risk_reward': 0
+        }
+    
+    # Calculate statistics
+    total_trades = len(self.trade_history)
+    winning_trades = [t for t in self.trade_history if t['pnl'] > 0]
+    losing_trades = [t for t in self.trade_history if t['pnl'] <= 0]
+    
+    win_count = len(winning_trades)
+    loss_count = len(losing_trades)
+    
+    win_rate = win_count / total_trades if total_trades > 0 else 0
+    
+    avg_profit = sum(t['pnl'] for t in winning_trades) / win_count if win_count > 0 else 0
+    avg_loss = sum(t['pnl'] for t in losing_trades) / loss_count if loss_count > 0 else 0
+    
+    total_profit = sum(t['pnl'] for t in winning_trades)
+    total_loss = abs(sum(t['pnl'] for t in losing_trades))
+    
+    profit_factor = total_profit / total_loss if total_loss > 0 else float('inf')
+    
+    # Return statistics
+    return {
+        'total_trades': total_trades,
+        'win_count': win_count,
+        'loss_count': loss_count,
+        'win_rate': win_rate,
+        'avg_profit': avg_profit,
+        'avg_loss': avg_loss,
+        'profit_factor': profit_factor,
+        'total_profit': total_profit,
+        'total_loss': total_loss,
+        'net_profit': total_profit - total_loss
+    }
+
+def check_exit_conditions(self, position, current_price):
+    """
+    Check if a position should be exited based on price conditions
+    
+    Parameters:
+    -----------
+    position : dict
+        Position information
+    current_price : float
+        Current market price
+        
+    Returns:
+    --------
+    tuple
+        (bool, str) - (Should exit, reason for exit)
+    """
+    # Validate position
+    if 'action' not in position or 'stop_loss' not in position:
+        return False, "Invalid position data"
+    
+    # Check stop loss
+    if position['action'] == 'BUY' and current_price <= position['stop_loss']:
+        return True, "Stop Loss"
+    elif position['action'] == 'SELL' and current_price >= position['stop_loss']:
+        return True, "Stop Loss"
+    
+    # Check target price if defined
+    if 'target_price' in position and position['target_price'] is not None:
+        if position['action'] == 'BUY' and current_price >= position['target_price']:
+            return True, "Target Reached"
+        elif position['action'] == 'SELL' and current_price <= position['target_price']:
+            return True, "Target Reached"
+    
+    # No exit conditions met
+    return False, NoneRetryClaude does not have the ability to run the code it generates yet.MContinueEdit3.7 src/paper_trade_executor.py
+pythonCopy# src/paper_trade_executor.py
+
+import logging
+import json
+import requests
+from datetime import datetime
+import os
+from pathlib import Path
+from src.symbol_registry import SymbolRegistry
+
+class StrategyTemplate:
+    """
+    Represents a strategy template for paper trading
+    """
+    
+    def __init__(self, template_id, name, parameters=None):
+        """
+        Initialize a strategy template
+        
+        Parameters:
+        -----------
+        template_id : str
+            Unique identifier for the template
+        name : str
+            Name of the strategy template
+        parameters : dict
+            Strategy parameters
+        """
+        self.id = template_id
+        self.name = name
+        self.parameters = parameters or {}
+        self.created_at = datetime.now().isoformat()
+        self.updated_at = self.created_at
+        
+    def to_json(self):
+        """
+        Convert template to JSON
+        
+        Returns:
+        --------
+        str
+            JSON representation of the template
+        """
+        return json.dumps({
+            'id': self.id,
+            'name': self.name,
+            'parameters': self.parameters,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at
+        }, indent=2)
+    
+    @classmethod
+    def from_json(cls, json_str):
+        """
+        Create template from JSON
+        
+        Parameters:
+        -----------
+        json_str : str
+            JSON string
+            
+        Returns:
+        --------
+        StrategyTemplate
+            Template object
+        """
+        data = json.loads(json_str)
+        template = cls(data['id'], data['name'], data['parameters'])
+        template.created_at = data['created_at']
+        template.updated_at = data['updated_at']
+        return template
+
+
+class PaperTradeExecutor:
+    """
+    Paper trading executor using AlgoMojo webhooks
+    """
+    
+    def __init__(self, api_config, trading_config, config_dir="config"):
+        """
+        Initialize the paper trade executor
+        
+        Parameters:
+        -----------
+        api_config : dict
+            Dictionary containing API credentials
+        trading_config : dict
+            Dictionary containing trading parameters
+        config_dir : str
+            Directory containing configuration files
+        """
+        self.logger = logging.getLogger(__name__)
+        self.config_dir = config_dir
+        
+        # API configuration
+        self.api_key = api_config.get('api_key')
+        self.api_secret = api_config.get('api_secret')
+        self.broker_code = api_config.get('broker_code')
+        
+        # Trading configuration
+        self.strategy_name = trading_config.get('strategy_name', 'Gann Square of 9')
+        self.webhook_url = trading_config.get('webhook_url', '')
+        
+        # Initialize symbol registry
+        self.symbol_registry = SymbolRegistry(config_dir)
+        
+        # Template storage directory
+        self.templates_dir = Path(trading_config.get('templates_dir', 'strategy_templates'))
+        if not self.templates_dir.exists():
+            self.templates_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load strategy templates
+        self.templates = self.load_strategy_templates()
+        
+        # Track paper trades
+        self.paper_trades = {}
+        self.positions = {}
+        
+        self.logger.info("Paper Trade Executor initialized")
+    
+    def load_strategy_templates(self):
+        """
+        Load strategy templates from files
+        
+        Returns:
+        --------
+        dict
+            Dictionary of strategy templates
+        """
+        templates = {}
+        
+        try:
+            template_files = list(self.templates_dir.glob('*.json'))
+            
+            for file_path in template_files:
+                with open(file_path, 'r') as f:
+                    try:
+                        template = StrategyTemplate.from_json(f.read())
+                        templates[template.id] = template
+                        self.logger.debug(f"Loaded template: {template.name} ({template.id})")
+                    except Exception as e:
+                        self.logger.error(f"Error loading template {file_path}: {e}")
+            
+            self.logger.info(f"Loaded {len(templates)} strategy templates")
+            return templates
+            
+        except Exception as e:
+            self.logger.error(f"Error loading strategy templates: {e}")
+            return {}
+    
+    def create_strategy_template(self, name, parameters=None):
+        """
+        Create a new strategy template
+        
+        Parameters:
+        -----------
+        name : str
+            Template name
+        parameters : dict
+            Strategy parameters
+            
+        Returns:
+        --------
+        StrategyTemplate
+            The created template
+        """
+        # Generate a unique ID
+        template_id = f"{name.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # Create template
+        template = StrategyTemplate(template_id, name, parameters)
+        
+        # Save to dictionary
+        self.templates[template_id] = template
+        
+        # Save to file
+        file_path = self.templates_dir / f"{template_id}.json"
+        with open(file_path, 'w') as f:
+            f.write(template.to_json())
+        
+        self.logger.info(f"Created strategy template: {name} ({template_id})")
+        return template
+    
+    def send_webhook_order(self, strategy_id, action, parameters=None):
+        """
+        Send an order via webhook
+        
+        Parameters:
+        -----------
+        strategy_id : str
+            Strategy ID for the webhook
+        action : str
+            Trading action (BUY, SELL)
+        parameters : dict
+            Additional parameters (optional)
+            
+        Returns:
+        --------
+        dict
+            Response data
+        """
+        if not self.webhook_url:
+            self.logger.error("Webhook URL not configured")
+            return {
+                "status": "error",
+                "message": "Webhook URL not configured"
+            }
+        
+        # Ensure URL is properly formatted
+        webhook_url = self.webhook_url
+        if "PlaceStrategyOrder" not in webhook_url:
+            webhook_url = f"{webhook_url.rstrip('/')}/PlaceStrategyOrder"
+        
+        # Create payload
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = {
+            "date": timestamp,
+            "action": action
+        }
+        
+        # Add additional parameters
+        if parameters:
+            # Ensure symbol is in AlgoMojo format
+            if 'symbol' in parameters:
+                symbol = parameters['symbol']
+                algomojo_symbol = self.symbol_registry.map_symbol(symbol, "tv", "algomojo")
+                if algomojo_symbol != symbol:
+                    self.logger.debug(f"Converted symbol for AlgoMojo: {symbol} -> {algomojo_symbol}")
+                    parameters['symbol'] = algomojo_symbol
+            
+            payload.update(parameters)
+        
+        # Set headers
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            # Log the request
+            self.logger.info(f"Sending webhook request: {webhook_url} - {json.dumps(payload)}")
+            
+            # Send the request
+            response = requests.post(webhook_url, json=payload, headers=headers)
+            
+            # Process response
+            if response.status_code == 200:
+                response_data = response.json()
+                
+                # Generate order ID
+                order_id = f"PAPER_{timestamp.replace(' ', '_')}_{strategy_id}"
+                
+                # Track the order
+                self.paper_trades[order_id] = {
+                    "strategy_id": strategy_id,
+                    "action": action,
+                    "parameters": parameters,
+                    "timestamp": timestamp,
+                    "response": response_data,
+                    "status": "SUCCESS" if response_data.get("status") == "success" else "FAILED"
+                }
+                
+                # Simulate execution
+                self.simulate_execution(order_id)
+                
+                return {
+                    "status": "success",
+                    "order_id": order_id,
+                    "response": response_data
+                }
+            else:
+                self.logger.error(f"Webhook request failed: {response.status_code} - {response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Webhook request failed with status {response.status_code}",
+                    "response": response.text
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error sending webhook request: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def simulate_execution(self, order_id):
+        """
+        Simulate the execution of a paper trade
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID to simulate
+            
+        Returns:
+        --------
+        dict
+            Execution details
+        """
+        if order_id not in self.paper_trades:
+            self.logger.error(f"Order not found: {order_id}")
+            return None
+        
+        order = self.paper_trades[order_id]
+        
+        # Update status
+        order["execution_time"] = datetime.now().isoformat()
+        order["execution_status"] = "COMPLETED"
+        
+        # Extract parameters
+        action = order.get("action")
+        parameters = order.get("parameters", {})
+        
+        symbol = parameters.get("symbol")
+        quantity = parameters.get("quantity", 1)
+        price = parameters.get("price", 0)
+        
+        # If no price provided, use a simulated price
+        if not price and symbol:
+            # In a real implementation, this would fetch the current market price
+            price = 1000.0  # Simulated price
+        
+        # Create a position record
+        position_id = f"POS_{order_id}"
+        position = {
+            "order_id": order_id,
+            "symbol": symbol,
+            "action": action,
+            "quantity": quantity,
+            "entry_price": price,
+            "entry_time": order["execution_time"],
+            "status": "OPEN"
+        }
+        
+        # Add to positions
+        self.positions[position_id] = position
+        
+        self.logger.info(f"Simulated execution for order {order_id}: {symbol} {action} {quantity} @ {price}")
+        
+        return position
+    
+    def place_order(self, symbol, action, quantity, price_type="MARKET", price=0, product=None, exchange=None):
+        """
+        Place a paper trade order
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol to trade
+        action : str
+            "BUY" or "SELL"
+        quantity : int
+            Order quantity
+        price_type : str
+            "MARKET" or "LIMIT"
+        price : float
+            Limit price (if price_type is "LIMIT")
+        product : str
+            Product type (MIS, NRML, etc.)
+        exchange : str
+            Exchange identifier
+            
+        Returns:
+        --------
+        dict
+            Order result
+        """
+        # Convert symbol to AlgoMojo format
+        algomojo_symbol = self.symbol_registry.map_symbol(symbol, "tv", "algomojo")
+        
+        # Log the conversion
+        if algomojo_symbol != symbol:
+            self.logger.debug(f"Converted symbol for order: {symbol} -> {algomojo_symbol}")
+        
+        # Prepare parameters
+        parameters = {
+            "symbol": algomojo_symbol,
+            "quantity": quantity,
+            "price_type": price_type
+        }
+        
+        if price_type == "LIMIT" and price > 0:
+            parameters["price"] = price
+        
+        if product:
+            parameters["product"] = product
+        
+        if exchange:
+            parameters["exchange"] = exchange
+        
+        # Send webhook order
+        return self.send_webhook_order("TRADE", action, parameters)
+    
+    def place_option_order(self, underlying, expiry_date, strike_price, option_type, action, quantity, 
+                          price_type="MARKET", price=0, product=None, exchange=None):
+        """
+        Place a paper trade option order
+        
+        Parameters:
+        -----------
+        underlying : str
+            Underlying symbol
+        expiry_date : str
+            Option expiry date
+        strike_price : float
+            Strike price
+        option_type : str
+            "CE" or "PE"
+        action : str
+            "BUY" or "SELL"
+        quantity : int
+            Order quantity
+        price_type : str
+            "MARKET" or "LIMIT"
+        price : float
+            Limit price (if price_type is "LIMIT")
+        product : str
+            Product type (MIS, NRML, etc.)
+        exchange : str
+            Exchange identifier
+            
+        Returns:
+        --------
+        dict
+            Order result
+        """
+        # Convert underlying to AlgoMojo format
+        underlying_algomojo = self.symbol_registry.map_symbol(underlying, "tv", "algomojo")
+        
+        # Construct option symbol
+        option_symbol = f"{underlying_algomojo}-{expiry_date}-{int(strike_price)}-{option_type}"
+        
+        # Set exchange if not provided
+        if not exchange:
+            if underlying in ["NIFTY", "BANKNIFTY", "FINNIFTY"]:
+                exchange = "NFO"
+            elif underlying in ["CRUDEOIL", "GOLD", "SILVER"]:
+                exchange = "MCX"
+            else:
+                exchange = "NFO"
+        
+        # Set product if not provided
+        if not product:
+            product = "NRML"
+        
+        # Place the order
+        return self.place_order(
+            symbol=option_symbol,
+            action=action,
+            quantity=quantity,
+            price_type=price_type,
+            price=price,
+            product=product,
+            exchange=exchange
+        )
+    
+    def _place_option_order(self, symbol_info, option_type, price, quantity=None):
+        """
+        Helper method to place an option order based on symbol info
+        
+        Parameters:
+        -----------
+        symbol_info : dict
+            Symbol information
+        option_type : str
+            "CE" or "PE"
+        price : float
+            Current price of the underlying
+        quantity : int
+            Order quantity (optional, if None uses lot size)
+            
+        Returns:
+        --------
+        dict
+            Order result
+        """
+        symbol = symbol_info.get("symbol")
+        symbol_type = symbol_info.get("type", "equity")
+        lot_size = symbol_info.get("option_lot_size", 50)
+        
+        # Get expiry
+        if symbol_type == "commodity":
+            expiry = self.symbol_registry.get_commodity_expiry(symbol)
+        else:
+            expiry = self.symbol_registry.get_expiry_date(symbol_type)
+        
+        # Get strike price
+        strike_price = self.symbol_registry.get_nearest_strike(symbol, price, round_up=(option_type=="PE"))
+        
+        # Set quantity if not provided
+        if quantity is None:
+            quantity = lot_size
+        
+        # Determine exchange
+        if symbol_type == "index":
+            exchange = "NFO"
+        elif symbol_type == "commodity":
+            exchange = "MCX"
+        else:
+            exchange = "NFO"
+        
+        # Place the option order
+        return self.place_option_order(
+            underlying=symbol,
+            expiry_date=expiry,
+            strike_price=strike_price,
+            option_type=option_type,
+            action="BUY",
+            quantity=quantity,
+            exchange=exchange
+        )
+    
+    def get_order_status(self, order_id):
+        """
+        Get the status of a paper trade order
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+            
+        Returns:
+        --------
+        dict
+            Order status
+        """
+        if order_id not in self.paper_trades:
+            return {
+                "status": "error",
+                "message": "Order not found"
+            }
+        
+        order = self.paper_trades[order_id]
+        
+        return {
+            "status": "success",
+            "data": order
+        }
+    
+    def modify_order(self, order_id, parameters):
+        """
+        Modify a paper trade order
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+        parameters : dict
+            New parameters
+            
+        Returns:
+        --------
+        dict
+            Result of the modification
+        """
+        if order_id not in self.paper_trades:
+            return {
+                "status": "error",
+                "message": "Order not found"
+            }
+        
+        order = self.paper_trades[order_id]
+        
+        # Update parameters
+        if "parameters" in order:
+            order["parameters"].update(parameters)
+        
+        order["modified_at"] = datetime.now().isoformat()
+        
+        self.logger.info(f"Modified paper trade order: {order_id}")
+        
+        return {
+            "status": "success",
+            "data": order
+        }
+    
+    def cancel_order(self, order_id):
+        """
+        Cancel a paper trade order
+        
+        Parameters:
+        -----------
+        order_id : str
+            Order ID
+            
+        Returns:
+        --------
+        dict
+            Result of the cancellation
+        """
+        if order_id not in self.paper_trades:
+            return {
+                "status": "error",
+                "message": "Order not found"
+            }
+        
+        order = self.paper_trades[order_id]
+        
+        # Update status
+        order["status"] = "CANCELLED"
+        order["cancelled_at"] = datetime.now().isoformat()
+        
+        self.logger.info(f"Cancelled paper trade order: {order_id}")
+        
+        return {
+            "status": "success",
+            "data": order
+        }
+    
+    def close_position(self, position_id, exit_price=None, exit_reason="MANUAL"):
+        """
+        Close a paper trade position
+        
+        Parameters:
+        -----------
+        position_id : str
+            Position ID
+        exit_price : float
+            Exit price (optional)
+        exit_reason : str
+            Reason for exit
+            
+        Returns:
+        --------
+        dict
+            Result of the position closure
+        """
+        if position_id not in self.positions:
+            return {
+                "status": "error",
+                "message": "Position not found"
+            }
+        
+        position = self.positions[position_id]
+        
+        # Skip if already closed
+        if position["status"] == "CLOSED":
+            return {
+                "status": "error",
+                "message": "Position already closed"
+            }
+        
+        # Use provided exit price or simulate one
+        if exit_price is None:
+            # In a real implementation, this would fetch the current market price
+            exit_price = position["entry_price"] * 1.01  # Simulated exit price
+        
+        # Calculate P&L
+        if position["action"] == "BUY":
+            pnl = (exit_price - position["entry_price"]) * position["quantity"]
+        else:  # SELL
+            pnl = (position["entry_price"] - exit_price) * position["quantity"]
+        
+        # Update position
+        position["exit_price"] = exit_price
+        position["exit_time"] = datetime.now().isoformat()
+        position["exit_reason"] = exit_reason
+        position["pnl"] = pnl
+        position["status"] = "CLOSED"
+        
+        self.logger.info(f"Closed paper trade position: {position_id}, Exit: {exit_price}, P&L: {pnl}")
+        
+        return {
+            "status": "success",
+            "data": position
+        }
+    
+    def close_all_positions(self, exit_reason="SYSTEM"):
+        """
+        Close all open paper trade positions
+        
+        Parameters:
+        -----------
+        exit_reason : str
+            Reason for exit
+            
+        Returns:
+        --------
+        dict
+            Results of the position closures
+        """
+        results = {}
+        
+        for position_id, position in self.positions.items():
+            if position["status"] == "OPEN":
+                result = self.close_position(position_id, None, exit_reason)
+                results[position_id] = result
+        
+        self.logger.info(f"Closed all paper trade positions: {len(results)} positions")
+        
+        return {
+            "status": "success",
+            "data": results
+        }
+    
+    def get_position_status(self, position_id):
+        """
+        Get the status of a paper trade position
+        
+        Parameters:
+        -----------
+        position_id : str
+            Position ID
+            
+        Returns:
+        --------
+        dict
+            Position status
+        """
+        if position_id not in self.positions:
+            return {
+                "status": "error",
+                "message": "Position not found"
+            }
+        
+        position = self.positions[position_id]
+        
+        return {
+            "status": "success",
+            "data": position
+        }
+    
+    def get_all_positions(self, status=None):
+        """
+        Get all paper trade positions
+        
+        Parameters:
+        -----------
+        status : str
+            Filter by status (optional)
+            
+        Returns:
+        --------
+        dict
+            All positions
+        """
+        if status:
+            filtered_positions = {pid: pos for pid, pos in self.positions.items() 
+                                if pos["status"] == status}
+            return {
+                "status": "success",
+                "data": filtered_positions
+            }
+        else:
+            return {
+                "status": "success",
+                "data": self.positions
+            }
+    
+    def get_positions_by_symbol(self, symbol):
+        """
+        Get all positions for a specific symbol
+        
+        Parameters:
+        -----------
+        symbol : str
+            Symbol to filter by
+            
+        Returns:
+        --------
+        dict
+            Positions for the symbol
+        """
+        # Normalize symbol format
+        algomojo_symbol = self.symbol_registry.map_symbol(symbol, "tv", "algomojo")
+        
+        filtered_positions = {pid: pos for pid, pos in self.positions.items() 
+                            if pos["symbol"] == algomojo_symbol}
+        
+        return {
+            "status": "success",
+            "data": filtered_positions
+        }
+    
+    def save_positions(self, filename="positions.json"):
+        """
+        Save positions to a file
+        
+        Parameters:
+        -----------
+        filename : str
+            Output filename
+            
+        Returns:
+        --------
+        bool
+            Success status
+        """
+        try:
+            with open(filename, 'w') as f:
+                json.dump(self.positions, f, indent=2)
+            
+            self.logger.info(f"Saved positions to {filename}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error saving positions: {e}")
+            return False
+    
+    def load_positions(self, filename="positions.json"):
+        """
+        Load positions from a file
+        
+        Parameters:
+        -----------
+        filename : str
+            Input filename
+            
+        Returns:
+        --------
+        bool
+            Success status
+        """
+        try:
+            if os.path.exists(filename):
+                with open(filename, 'r') as f:
+                    self.positions = json.load(f)
+                
+                self.logger.info(f"Loaded {len(self.positions)} positions from {filename}")
+                return True
+            else:
+                self.logger.warning(f"Positions file not found: {filename}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error loading positions: {e}")
+            return False
+3.8 src/option_helpers.py
+pythonCopy# src/option_helpers.py
+
+import math
+from datetime import datetime, timedelta
+
+class OptionHelpers:
+    """
+    Helper functions for options trading with Gann Square of 9
+    """
+    
+    @staticmethod
+    def get_atm_strike(current_price, symbol=None, strike_interval=None, round_up=False):
+        """
+        Get the at-the-money strike price
+        
+        Parameters:
+        -----------
+        current_price : float
+            Current price of the underlying
+        symbol : str
+            Symbol name for predefined intervals
+        strike_interval : float
+            Strike price interval (if known)
+        round_up : bool
+            Whether to round up (True) or down (False)
+            
+        Returns:
+        --------
+        float
+            At-the-money strike price
+        """
+        # Determine strike interval if not provided
+        if strike_interval is None:
+            if symbol in ['NIFTY', 'NIFTY50']:
+                strike_interval = 50
+            elif symbol in ['BANKNIFTY', 'NIFTYBANK']:
+                strike_interval = 100
+            elif symbol in ['FINNIFTY']:
+                strike_interval = 50
+            else:
+                # For stocks, use percentage of price
+                price_percent = current_price * 0.01
+                
+                if price_percent < 5:
+                    strike_interval = 5
+                elif price_percent < 10:
+                    strike_interval = 10
+                elif price_percent < 25:
+                    strike_interval = 25
+                elif price_percent < 50:
+                    strike_interval = 50
+                else:
+                    strike_interval = 100
+        
+        # Calculate nearest strike
+        if round_up:
+            return math.ceil(current_price / strike_interval) * strike_interval
+        else:
+            return math.floor(current_price / strike_interval) * strike_interval
+    
+    @staticmethod
+    def get_option_strike_type(current_price, strike_price, option_type):
+        """
+        Determine if an option is ITM, ATM, or OTM
+        
+        Parameters:
+        -----------
+        current_price : float
+            Current price of the underlying
+        strike_price : float
+            Strike price of the option
+        option_type : str
+            Option type (CE or PE)
+            
+        Returns:
+        --------
+        str
+            Option moneyness (ITM, ATM, OTM)
+        """
+        if option_type == 'CE':
+            if current_price > strike_price:
+                return 'ITM'
+            elif current_price < strike_price:
+                return 'OTM'
+            else:
+                return 'ATM'
+        elif option_type == 'PE':
+            if current_price < strike_price:
+                return 'ITM'
+            elif current_price > strike_price:
+                return 'OTM'
+            else:
+                return 'ATM'
+        else:
+            return 'Unknown'
+    
+    @staticmethod
+    def get_option_strikes(current_price, symbol=None, num_strikes=5, strike_interval=None):
+        """
+        Get a range of option strikes around the current price
+        
+        Parameters:
+        -----------
+        current_price : float
+            Current price of the underlying
+        symbol : str
+            Symbol name for predefined intervals
+        num_strikes : int
+            Number of strikes to generate on each side
+        strike_interval : float
+            Strike price interval (if known)
+            
+        Returns:
+        --------
+        dict
+            Dictionary with ITM, ATM, and OTM strikes for CE and PE
+        """
+        # Get ATM strike
+        atm_strike = OptionHelpers.get_atm_strike(current_price, symbol, strike_interval)
+        
+        # Determine strike interval if not provided
+        if strike_interval is None:
+            if symbol in ['NIFTY', 'NIFTY50']:
+                strike_interval = 50
+            elif symbol in ['BANKNIFTY', 'NIFTYBANK']:
+                strike_interval = 100
+            elif symbol in ['FINNIFTY']:
+                strike_interval = 50
+            else:
+                # For stocks, use percentage of price
+                price_percent = current_price * 0.01
+                
+                if price_percent < 5:
+                    strike_interval = 5
+                elif price_percent < 10:
+                    strike_interval = 10
+                elif price_percent < 25:
+                    strike_interval = 25
+                elif price_percent < 50:
+                    strike_interval = 50
+                else:
+                    strike_interval = 100
+        
+        # Generate strikes
+        strikes = []
+        for i in range(-num_strikes, num_strikes + 1):
+            strikes.append(atm_strike + (i * strike_interval))
+        
+        # Categorize strikes
+        ce_itm = []
+        ce_otm = []
+        pe_itm = []
+        pe_otm = []
+        
+        for strike in strikes:
+            if strike < current_price:
+                ce_itm.append(strike)
+                pe_otm.append(strike)
+            elif strike > current_price:
+                ce_otm.append(strike)
+                pe_itm.append(strike)
+        
+        return {
+            'ATM': atm_strike,
+            'CE': {
+                'ITM': sorted(ce_itm, reverse=True),
+                'OTM': sorted(ce_otm)
+            },
+            'PE': {
+                'ITM': sorted(pe_itm),
+                'OTM': sorted(pe_otm, reverse=True)
+            }
+        }
+    
+    @staticmethod
+    def get_expiry_date(symbol_type='index', reference_date=None):
+        """
+        Get the appropriate expiry date
+        
+        Parameters:
+        -----------
+        symbol_type : str
+            Symbol type (index or equity)
+        reference_date : datetime
+            Reference date (defaults to current date)
+            
+        Returns:
+        --------
+        datetime
+            Expiry date
+        """
+        if reference_date is None:
+            reference_date = datetime.now()
+        
+        if symbol_type == 'index':
+            # For indexes, get the nearest weekly expiry (usually Thursday)
+            days_to_thursday = (3 - reference_date.weekday()) % 7
+            
+            # If today is Thursday and it's past market close, get next week
+            if days_to_thursday == 0 and reference_date.hour >= 15:
+                days_to_thursday = 7
+            
+            expiry_date = reference_date + timedelta(days=days_to_thursday)
+        else:
+            # For equities, get the monthly expiry (last Thursday of the month)
+            
+            # Get the last day of the current month
+            if reference_date.month == 12:
+                last_day = datetime(reference_date.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                last_day = datetime(reference_date.year, reference_date.month + 1, 1) - timedelta(days=1)
+            
+            # Find the last Thursday
+            days_to_subtract = (last_day.weekday() - 3) % 7
+            last_thursday = last_day - timedelta(days=days_to_subtract)
+            
+            # If the last Thursday has passed, use the last Thursday of next month
+            if last_thursday < reference_date:
+                if reference_date.month == 12:
+                    last_day = datetime(reference_date.year + 1, 2, 1) - timedelta(days=1)
+                else:
+                    last_day = datetime(reference_date.year, reference_date.month + 2, 1) - timedelta(days=1)
+                
+                days_to_subtract = (last_day.weekday() - 3) % 7
+                last_thursday = last_day - timedelta(days=days_to_subtract)
+            
+            expiry_date = last_thursday
+        
+        return expiry_date
+    
+    @staticmethod
+    def format_expiry_date(expiry_date, format_string="%d%b"):
+        """
+        Format expiry date according to broker requirements
+        
+        Parameters:
+        -----------
+        expiry_date : datetime
+            Expiry date
+        format_string : str
+            Format string for the date
+            
+        Returns:
+        --------
+        str
+            Formatted expiry date string
+        """
+        return expiry_date.strftime(format_stringRetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going. Claude does not have the ability to run the code it generates yet.Claude can make mistakes. Please double-check responses. 3.7 SonnetChoose style
