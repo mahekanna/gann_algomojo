@@ -1,0 +1,65 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar 14 00:36:57 2025
+
+@author: mahes
+"""
+
+{
+    "rules": [
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "^([A-Z]+)$",
+            "replacement": "\\1-EQ",
+            "description": "Convert simple equity symbol to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "equity"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "^(NIFTY|BANKNIFTY|FINNIFTY)$",
+            "replacement": "\\1-I",
+            "description": "Convert index symbol to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "index"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "^([A-Z]+)-EQ$",
+            "replacement": "\\1",
+            "description": "Convert AlgoMojo equity to TradingView format",
+            "use_regex": true,
+            "apply_to": "equity"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "^([A-Z]+)-I$",
+            "replacement": "\\1",
+            "description": "Convert AlgoMojo index to TradingView format",
+            "use_regex": true,
+            "apply_to": "index"
+        },
+        {
+            "from": "tv",
+            "to": "algomojo",
+            "pattern": "([A-Z]+)1!",
+            "replacement": "\\1-FUT",
+            "description": "Convert TradingView commodity futures to AlgoMojo format",
+            "use_regex": true,
+            "apply_to": "commodity"
+        },
+        {
+            "from": "algomojo",
+            "to": "tv",
+            "pattern": "([A-Z]+)-FUT",
+            "replacement": "\\11!",
+            "description": "Convert AlgoMojo commodity futures to TradingView format",
+            "use_regex": true,
+            "apply_to": "commodity"
+        }
+    ]
+}

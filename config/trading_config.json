@@ -1,0 +1,39 @@
+{
+    "default_timeframe": "1h",
+    "default_product": "MIS",
+    "default_exchange": "NSE",
+    "order_retry_count": 3,
+    "order_retry_delay": 2,
+    "strategy_name": "Gann Square of 9",
+    "trading_hours": {
+        "start": "09:15",
+        "end": "15:30"
+    },
+    "scan_interval": 60,
+    "close_positions_on_exit": true,
+    "paper_trading": true,
+    "webhook_url": "https://amapi.algomojo.com/v1/webhook/ab/your-webhook-id/your-webhook-token/your-strategy-id/PlaceStrategyOrder",
+    "gann_parameters": {
+        "increments": [
+            0.125,
+            0.25,
+            0.5,
+            0.75,
+            1.0,
+            0.75,
+            0.5,
+            0.25
+        ],
+        "num_values": 20,
+        "buffer_percentage": 0.002,
+        "include_lower": true
+    },
+    "risk_parameters": {
+        "max_risk_per_trade": 0.01,
+        "max_positions": 5,
+        "max_risk_per_symbol": 0.02,
+        "max_daily_loss": 0.05,
+        "max_drawdown": 0.1,
+        "min_risk_reward": 1.5
+    }
+}

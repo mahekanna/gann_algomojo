@@ -1,0 +1,124 @@
+{
+    "symbols": [
+        {
+            "symbol": "NIFTY",
+            "description": "Nifty 50 Index",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 50,
+            "exchange": "NSE",
+            "tv_symbol": "NIFTY",
+            "algomojo_symbol": "NIFTY-I"
+        },
+        {
+            "symbol": "BANKNIFTY",
+            "description": "Bank Nifty Index",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 25,
+            "exchange": "NSE",
+            "tv_symbol": "BANKNIFTY",
+            "algomojo_symbol": "BANKNIFTY-I"
+        },
+        {
+            "symbol": "FINNIFTY",
+            "description": "Financial Services Nifty",
+            "type": "index",
+            "timeframe": "1h",
+            "option_lot_size": 40,
+            "exchange": "NSE",
+            "tv_symbol": "FINNIFTY",
+            "algomojo_symbol": "FINNIFTY-I"
+        },
+        {
+            "symbol": "RELIANCE",
+            "description": "Reliance Industries Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 250,
+            "exchange": "NSE",
+            "tv_symbol": "RELIANCE",
+            "algomojo_symbol": "RELIANCE-EQ"
+        },
+        {
+            "symbol": "INFY",
+            "description": "Infosys Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 300,
+            "exchange": "NSE",
+            "tv_symbol": "INFY",
+            "algomojo_symbol": "INFY-EQ"
+        },
+        {
+            "symbol": "HDFCBANK",
+            "description": "HDFC Bank Limited",
+            "type": "equity",
+            "timeframe": "1h",
+            "option_lot_size": 550,
+            "exchange": "NSE",
+            "tv_symbol": "HDFCBANK",
+            "algomojo_symbol": "HDFCBANK-EQ"
+        },
+        {
+            "symbol": "CRUDEOIL",
+            "description": "Crude Oil Futures",
+            "type": "commodity",
+            "timeframe": "1h",
+            "option_lot_size": 100,
+            "lot_size": 100,
+            "tick_size": 1,
+            "exchange": "MCX",
+            "tv_symbol": "CRUDEOIL1!",
+            "algomojo_symbol": "CRUDEOIL-FUT"
+        },
+        {
+            "symbol": "GOLD",
+            "description": "Gold Futures",
+            "type": "commodity",
+            "timeframe": "1h",
+            "option_lot_size": 100,
+            "lot_size": 100,
+            "tick_size": 1,
+            "exchange": "MCX",
+            "tv_symbol": "GOLD1!",
+            "algomojo_symbol": "GOLD-FUT"
+        },
+        {
+            "symbol": "SILVER",
+            "description": "Silver Futures",
+            "type": "commodity",
+            "timeframe": "1h",
+            "option_lot_size": 100,
+            "lot_size": 30,
+            "tick_size": 1,
+            "exchange": "MCX",
+            "tv_symbol": "SILVER1!",
+            "algomojo_symbol": "SILVER-FUT"
+        },
+        {
+            "symbol": "CRUDEOILMINI",
+            "description": "Crude Oil Mini Futures",
+            "type": "commodity",
+            "timeframe": "1h",
+            "option_lot_size": 10,
+            "lot_size": 10,
+            "tick_size": 1,
+            "exchange": "MCX",
+            "tv_symbol": "CRUDEOILMINI1!",
+            "algomojo_symbol": "CRUDEOILMINI-FUT"
+        },
+        {
+            "symbol": "GOLDMINI",
+            "description": "Gold Mini Futures",
+            "type": "commodity",
+            "timeframe": "1h",
+            "option_lot_size": 10,
+            "lot_size": 10,
+            "tick_size": 1,
+            "exchange": "MCX",
+            "tv_symbol": "GOLDMINI1!",
+            "algomojo_symbol": "GOLDMINI-FUT"
+        }
+    ]
+}
